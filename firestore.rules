@@ -1,0 +1,174 @@
+rules_version = '2';
+// =====================================================================
+// ShopSathi v1.0.1 — Firestore Security Rules
+// Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
+// ZAROORI: neeche adminMobiles() mein apna (Super Admin) mobile number daalein
+// (shared/config.js ke adminMobile jaisa hi).
+// Login email ka format: <mobile>@shopsathi.app  (app khud banata hai)
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Super Admin ka mobile (10 digit) ----
+    function adminMobiles() { return ['9765838383']; }
+
+    function signedIn() { return request.auth != null; }
+    function myMobile() { return request.auth.token.email.split('@')[0]; }
+    function isAdmin() { return signedIn() && myMobile() in adminMobiles(); }
+    function shopDoc(shopId) { return /databases/$(database)/documents/shops/$(shopId); }
+    function memberDoc(shopId, mobile) { return /databases/$(database)/documents/shops/$(shopId)/members/$(mobile); }
+    function shopData(shopId) { return get(shopDoc(shopId)).data; }
+    function isOwner(shopId) { return signedIn() && shopData(shopId).ownerUid == request.auth.uid; }
+    function isStaff(shopId) { return signedIn() && request.auth.uid in shopData(shopId).staffUids; }
+    function isManager(shopId) { return isOwner(shopId) || isStaff(shopId); }
+    function isMe(mobile) { return signedIn() && myMobile() == mobile; }
+    function shopActive(shopId) { return shopData(shopId).active == true; }
+    function myMemberOk(shopId) {
+      return exists(memberDoc(shopId, myMobile())) && get(memberDoc(shopId, myMobile())).data.blocked == false;
+    }
+
+    // ---- har user ka apna profile ----
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- dukaan ----
+    match /shops/{shopId} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.plan == 'free'
+        && request.resource.data.paidUntil == 0
+        && request.resource.data.active == true
+        && request.resource.data.customerCount == 0
+        && request.resource.data.nextCode == 1
+        && request.resource.data.staffUids.size() == 0;
+
+      // customer judne / hatne par sirf counter (nextCode, customerCount) badalta hai
+      function counterChange() {
+        let d = request.resource.data.diff(resource.data);
+        let joinMe = existsAfter(memberDoc(shopId, myMobile())) && !exists(memberDoc(shopId, myMobile()));
+        let leaveMe = !existsAfter(memberDoc(shopId, myMobile())) && exists(memberDoc(shopId, myMobile()));
+        return d.affectedKeys().hasOnly(['nextCode', 'customerCount'])
+          && (
+            (request.resource.data.nextCode == resource.data.nextCode + 1
+              && request.resource.data.customerCount == resource.data.customerCount + 1
+              && resource.data.active == true
+              && (resource.data.plan == 'paid' || resource.data.customerCount < 50)
+              && (isManager(shopId) || joinMe))
+            ||
+            (request.resource.data.nextCode == resource.data.nextCode
+              && request.resource.data.customerCount == resource.data.customerCount - 1
+              && (isManager(shopId) || leaveMe))
+          );
+      }
+
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+                 ['ownerUid', 'plan', 'paidUntil', 'active', 'createdAt', 'customerCount', 'nextCode', 'shortCode']))
+        || (signedIn() && counterChange());
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      // ---- customers (doc id = mobile) ----
+      match /members/{mobile} {
+        allow read: if isMe(mobile) || isManager(shopId) || isAdmin();
+        allow create: if isManager(shopId)
+          || (isMe(mobile) && shopActive(shopId)
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.points == shopData(shopId).welcomeBonus
+              && request.resource.data.lifetimePoints == shopData(shopId).welcomeBonus
+              && request.resource.data.totalSpend == 0
+              && request.resource.data.billCount == 0
+              && request.resource.data.blocked == false
+              && request.resource.data.level == 'silver'
+              && request.resource.data.referralPaid == false);
+        allow update: if isManager(shopId)
+          || (isMe(mobile)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'appUser', 'name', 'dobMonth'])
+              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['dobMonth'])
+                  || resource.data.get('dobMonth', 0) == 0));
+        allow delete: if isOwner(shopId) || isMe(mobile);
+
+        match /notifs/{nid} {
+          allow read, delete: if isMe(mobile) || isManager(shopId);
+          allow create: if isManager(shopId);
+          allow update: if isManager(shopId)
+            || (isMe(mobile) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+        }
+      }
+
+      // ---- bills ----
+      match /bills/{billId} {
+        allow read: if isManager(shopId) || isAdmin()
+          || (signedIn() && resource.data.memberId == myMobile());
+        allow create: if isManager(shopId)
+          || (signedIn()
+              && request.resource.data.memberId == myMobile()
+              && request.resource.data.status == 'pending'
+              && request.resource.data.points == 0
+              && request.resource.data.amount is number
+              && request.resource.data.amount > 0
+              && shopActive(shopId)
+              && myMemberOk(shopId));
+        allow update: if isManager(shopId);
+        allow delete: if isOwner(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+      }
+
+      // ---- bill photos (alag doc taaki list halki rahe) ----
+      match /photos/{billId} {
+        allow read: if isManager(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+        allow create: if isManager(shopId)
+          || (signedIn() && request.resource.data.memberId == myMobile()
+              && request.resource.data.data.size() < 400000);
+        allow update: if false;
+        allow delete: if isOwner(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+      }
+
+      // ---- gifts ----
+      match /gifts/{giftId} {
+        allow read: if signedIn();
+        allow create, delete: if isOwner(shopId);
+        allow update: if isOwner(shopId)
+          || (isStaff(shopId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']));
+      }
+
+      // ---- gift requests ----
+      match /redemptions/{rid} {
+        allow read: if isManager(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+        allow create: if signedIn()
+          && request.resource.data.memberId == myMobile()
+          && request.resource.data.status == 'requested'
+          && myMemberOk(shopId);
+        allow update: if isManager(shopId)
+          || (signedIn() && resource.data.memberId == myMobile()
+              && resource.data.status == 'requested'
+              && request.resource.data.status == 'cancelled'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt']));
+        allow delete: if isOwner(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+      }
+
+      // ---- points ledger (hisaab) ----
+      match /ledger/{lid} {
+        allow read: if isManager(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+        allow create: if isManager(shopId)
+          || (signedIn()
+              && request.resource.data.memberId == myMobile()
+              && request.resource.data.type == 'welcome'
+              && request.resource.data.points == shopData(shopId).welcomeBonus);
+        allow update: if false;
+        allow delete: if isOwner(shopId)
+          || (signedIn() && resource.data.memberId == myMobile());
+      }
+    }
+  }
+}

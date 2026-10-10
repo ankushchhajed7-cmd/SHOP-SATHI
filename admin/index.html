@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<!--
+  ShopSathi — Super Admin (sirf Ankush ke liye)
+  v1.0.0 (2026-10-10): saari dukaanein, plan (free/paid + valid till), chalu/band, WhatsApp owner.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>ShopSathi Admin</title>
+<meta name="theme-color" content="#C2C7CC">
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="../shared/theme.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
+<script src="../shared/common.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+const t = SS.t, esc = SS.esc, ic = SS.ic;
+const app = document.getElementById('app');
+const A = { shops: [], q: '', f: 'all' };
+
+function boot() {
+  if (!SS.configured()) { app.innerHTML = SS.notConfiguredHTML(); return; }
+  if (!window.firebase) { app.innerHTML = SS.offlineLibHTML(); return; }
+  SS.initFirebase();
+  SS.auth.onAuthStateChanged((u) => (u ? onLogin(u) : renderAuth()));
+}
+function renderAuth() {
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(80) + SS.wordmark(30) + '<b>Super Admin</b></div><main class="page"><form id="af" class="col">' +
+    '<label class="f">' + t('mobile') + '<input class="inp" id="mb" type="tel" inputmode="numeric" maxlength="10"></label>' +
+    '<label class="f">' + t('pin') + '<input class="inp" id="pn" type="password" inputmode="numeric" maxlength="6"></label><div id="aerr"></div>' +
+    '<button class="btn dark big">' + t('login') + '</button></form><div class="ver">ShopSathi Admin v' + SS.VERSION + '</div></main></div>';
+  SS.$('#af').onsubmit = async (e) => {
+    e.preventDefault();
+    try { SS.busy(true); await SS.login(SS.$('#mb').value.trim(), SS.$('#pn').value.trim()); }
+    catch (ex) { SS.$('#aerr').innerHTML = '<div class="err">' + esc(SS.authErr(ex)) + '</div>'; }
+    finally { SS.busy(false); }
+  };
+}
+async function onLogin(u) {
+  if (SS.mobileOf(u) !== String(SS.CFG.adminMobile)) {
+    app.innerHTML = '<main class="page"><div class="err">' + t('not_admin') + '</div><button class="btn dark big" id="lo">' + t('logout') + '</button></main>';
+    SS.$('#lo').onclick = () => SS.logout();
+    return;
+  }
+  load();
+}
+async function load() {
+  try {
+    SS.busy(true);
+    const q = await SS.db.collection('shops').get();
+    A.shops = SS.docs(q).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    draw();
+  } catch (e) { app.innerHTML = '<main class="page"><div class="err">' + esc(SS.authErr(e)) + '<br>' + t('admin_rules_hint') + '</div><button class="btn dark big" id="lo">' + t('logout') + '</button></main>'; SS.$('#lo').onclick = () => SS.logout(); }
+  finally { SS.busy(false); }
+}
+function draw() {
+  const now = SS.now();
+  const q = A.q.toLowerCase();
+  const paidOk = (s) => s.plan === 'paid' && (!s.paidUntil || s.paidUntil >= now);
+  let list = A.shops.filter((s) => !q || (s.name || '').toLowerCase().indexOf(q) >= 0 || s.id.toLowerCase().indexOf(q) >= 0 || (s.mobile || '').indexOf(q) >= 0 || (s.city || '').toLowerCase().indexOf(q) >= 0);
+  if (A.f === 'paid') list = list.filter(paidOk);
+  if (A.f === 'free') list = list.filter((s) => s.plan !== 'paid');
+  if (A.f === 'expired') list = list.filter((s) => s.plan === 'paid' && s.paidUntil && s.paidUntil < now);
+  if (A.f === 'off') list = list.filter((s) => !s.active);
+  const tot = { shops: A.shops.length, paid: A.shops.filter(paidOk).length, cust: A.shops.reduce((a, s) => a + (s.customerCount || 0), 0), off: A.shops.filter((s) => !s.active).length };
+  const chip = (k, l) => '<button class="chip ' + (A.f === k ? 'on' : '') + '" data-f="' + k + '">' + l + '</button>';
+  app.innerHTML = '<header class="mhdr"><div class="top">' + SS.logo(40) + '<div class="brand"><b><span>Shop</span>Sathi</b><small>Super Admin</small></div><button class="iconbtn" id="rf" aria-label="Refresh">' + ic('refresh') + '</button><button class="iconbtn" id="lo" aria-label="' + t('logout') + '">' + ic('logout') + '</button></div>' +
+    '<div class="stats"><div class="stat"><b>' + tot.shops + '</b><span>' + t('a_shops') + '</span></div><div class="stat"><b>' + tot.paid + '</b><span>' + t('a_paid') + '</span></div><div class="stat"><b>' + tot.cust + '</b><span>' + t('customers') + '</span></div><div class="stat"><b>' + tot.off + '</b><span>' + t('a_off') + '</span></div></div></header>' +
+    '<main class="page" style="padding-bottom:30px"><div class="search">' + ic('search', 20) + '<input class="inp" id="q" type="search" placeholder="' + t('a_search') + '" value="' + esc(A.q) + '"></div>' +
+    '<div class="chips">' + chip('all', t('all')) + chip('free', t('plan_free')) + chip('paid', t('plan_paid')) + chip('expired', t('a_expired')) + chip('off', t('a_off')) + '</div>' +
+    '<div class="list">' + (list.length ? list.map(card).join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div></main>';
+  SS.$('#lo').onclick = () => SS.logout();
+  SS.$('#rf').onclick = load;
+  SS.$('#q').oninput = (e) => { A.q = e.target.value; draw(); const el = SS.$('#q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); };
+  SS.$$('[data-f]').forEach((b) => (b.onclick = () => { A.f = b.dataset.f; draw(); }));
+  SS.$$('[data-act]').forEach((b) => (b.onclick = () => act(b.dataset.act, b.dataset.id)));
+}
+function card(s) {
+  const now = SS.now();
+  const exp = s.plan === 'paid' && s.paidUntil && s.paidUntil < now;
+  return '<div class="card col"><div class="between"><div><b style="font-size:18px">' + esc(s.name) + '</b><div class="small muted">' + esc(s.id) + ' · ' + esc(t('type_' + (s.type || 'other'))) + ' · ' + esc(s.city || '') + '</div></div>' +
+    (s.active ? (s.plan === 'paid' ? '<span class="pill ' + (exp ? 'rej' : 'ok') + '">' + (exp ? t('a_expired') : t('plan_paid')) + '</span>' : '<span class="pill grey">' + t('plan_free') + '</span>') : '<span class="pill rej">' + t('a_off') + '</span>') + '</div>' +
+    '<div class="kv"><span>' + t('owner') + '</span><b>' + esc(s.ownerName || '') + ' · ' + esc(s.mobile || '') + '</b></div>' +
+    '<div class="kv"><span>' + t('customers') + '</span><b>' + (s.customerCount || 0) + '</b></div>' +
+    (s.plan === 'paid' ? '<div class="kv"><span>' + t('valid_till') + '</span><b>' + SS.fmtDateFull(s.paidUntil) + '</b></div>' : '') +
+    '<div class="kv"><span>' + t('a_created') + '</span><b>' + SS.fmtDateFull(s.createdAt) + '</b></div>' +
+    '<div class="btnrow"><button class="btn gold sm" data-act="p30" data-id="' + esc(s.id) + '">+30 ' + t('a_days') + '</button><button class="btn gold sm" data-act="p365" data-id="' + esc(s.id) + '">+1 ' + t('a_year') + '</button>' +
+    (s.plan === 'paid' ? '<button class="btn light sm" data-act="free" data-id="' + esc(s.id) + '">' + t('plan_free') + '</button>' : '') + '</div>' +
+    '<div class="btnrow"><button class="btn ' + (s.active ? 'danger' : 'ok') + ' sm" data-act="toggle" data-id="' + esc(s.id) + '">' + (s.active ? t('a_deactivate') : t('a_activate')) + '</button><a class="btn light sm" target="_blank" rel="noopener" href="' + SS.wa(s.mobile, 'ShopSathi — ' + (s.name || '')) + '">' + ic('wa', 18) + 'WhatsApp</a></div></div>';
+}
+async function act(a, id) {
+  const s = A.shops.find((x) => x.id === id); if (!s) return;
+  const ref = SS.db.collection('shops').doc(id);
+  const now = SS.now();
+  let upd = null;
+  if (a === 'p30' || a === 'p365') { const base = Math.max(now, s.plan === 'paid' ? s.paidUntil || 0 : 0); upd = { plan: 'paid', paidUntil: base + (a === 'p30' ? 30 : 365) * 86400000 }; }
+  if (a === 'free') { if (!(await SS.confirm(t('a_confirm_free'), t('plan_free')))) return; upd = { plan: 'free', paidUntil: 0 }; }
+  if (a === 'toggle') { if (!(await SS.confirm(s.active ? t('a_confirm_off') : t('a_confirm_on'), s.active ? t('a_deactivate') : t('a_activate'), s.active))) return; upd = { active: !s.active }; }
+  if (!upd) return;
+  try { await SS.run(() => ref.update(upd), t('saved')); Object.assign(s, upd); draw(); } catch (e) {}
+}
+boot();
+})();
+</script>
+</body>
+</html>
