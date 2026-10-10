@@ -1,4 +1,4 @@
-# ShopSathi v1.0.1 — har bill par reward points
+# ShopSathi v1.0.2 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -87,5 +87,6 @@ firestore.rules       security rules
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.0.2 (11 Oct 2026)** — install fix: dono apps ko alag manifest id, taaki Chrome "already installed / Could not open app" na dikhaye.
 - **v1.0.1 (11 Oct 2026)** — Firebase project `shopsathi-25794` ka config aur admin number (9765838383) jod diya.
 - **v1.0.0 (10 Oct 2026)** — pehla release.
