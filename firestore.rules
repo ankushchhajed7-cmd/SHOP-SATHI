@@ -1,6 +1,6 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.0.1 — Firestore Security Rules
+// ShopSathi v1.0.2 — Firestore Security Rules
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
 // ZAROORI: neeche adminMobiles() mein apna (Super Admin) mobile number daalein
 // (shared/config.js ke adminMobile jaisa hi).
