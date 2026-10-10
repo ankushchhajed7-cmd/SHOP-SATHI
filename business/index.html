@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<!--
+  ShopSathi — Business App (dukaandar + staff)
+  v1.0.0 (2026-10-10): pehla release — setup wizard (5 step), pending bills approve/reject
+  (final amount edit, duplicate check), customers (search, QR scan, detail, call/WhatsApp, block,
+  bina smartphone wale customer, manual bill), gifts + gift requests, reports + settlement list,
+  Excel backup, photo archive (ZIP), nayi scheme, staff login, plan/upgrade, 4 bhasha, dukaan delete.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ShopSathi Business</title>
+<meta name="theme-color" content="#C2C7CC">
+<meta name="description" content="ShopSathi Business — customer reward points manage karein">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="../shared/theme.css">
+<style>
+@media print{body *{visibility:hidden}#printable,#printable *{visibility:visible}#printable{position:absolute;left:0;top:0;width:100%}.noprint{display:none!important}}
+.rolebadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--ink);color:var(--gold-l);margin-left:6px;vertical-align:middle}
+.menu .item{min-height:56px}
+.reasons .chip{text-align:left}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+<script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
+<script src="../shared/common.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+const t = SS.t, esc = SS.esc, ic = SS.ic;
+const app = document.getElementById('app');
+const B = {
+  user: null, mobile: '', profile: null, shopId: null, shop: null, role: null,
+  members: [], memMap: {}, pending: [], gifts: [], reds: [], tab: 'home', view: null,
+  unsub: [], seenPending: null, pendingSignup: null, monthStats: null, custQuery: '', custSort: 'name'
+};
+const TYPES = ['kirana', 'medical', 'cloth', 'general', 'dairy', 'hardware', 'electronics', 'restaurant', 'salon', 'other'];
+const REASONS = ['rs_photo', 'rs_amount', 'rs_old', 'rs_dup', 'rs_notours'];
+
+/* ---------------- Boot / auth ---------------- */
+function boot() {
+  document.documentElement.lang = SS.htmlLang();
+  if (!SS.configured()) { app.innerHTML = SS.notConfiguredHTML(); return; }
+  if (!window.firebase) { app.innerHTML = SS.offlineLibHTML(); return; }
+  SS.initFirebase();
+  SS.registerSW();
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(88) + SS.wordmark(32) + '</div></div>';
+  SS.auth.onAuthStateChanged((u) => { if (u) onLogin(u); else { cleanup(); B.user = null; renderAuth(); } });
+}
+function cleanup() { B.unsub.forEach((f) => { try { f(); } catch (e) {} }); B.unsub = []; }
+const shopRef = () => SS.db.collection('shops').doc(B.shopId);
+const isOwner = () => B.role === 'owner';
+
+function renderAuth(mode) {
+  mode = mode || 'login';
+  app.innerHTML =
+    '<div class="authwrap"><div class="authhdr">' + SS.logo(88) + SS.wordmark(34) +
+    '<div style="font-weight:700;color:#33373C">' + t('biz_tagline') + '</div></div>' +
+    '<main class="page" style="padding-bottom:30px">' +
+    '<div class="row"><span class="muted">' + ic('lang') + '</span>' + SS.langSelect('lang') + '</div>' +
+    '<div class="seg"><button class="' + (mode === 'login' ? 'on' : '') + '" data-m="login">' + t('login') + '</button><button class="' + (mode === 'signup' ? 'on' : '') + '" data-m="signup">' + t('new_shop_account') + '</button></div>' +
+    '<form id="af" class="col">' +
+    (mode === 'signup' ? '<label class="f">' + t('owner_name') + '<input class="inp" id="nm" autocomplete="name" required></label>' : '') +
+    '<label class="f">' + t('mobile') + '<input class="inp" id="mb" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="98XXXXXXXX" required></label>' +
+    '<label class="f">' + t('pin') + ' <small>' + t('pin_hint') + '</small><input class="inp" id="pn" type="password" inputmode="numeric" maxlength="6" autocomplete="' + (mode === 'signup' ? 'new-password' : 'current-password') + '" required></label>' +
+    '<div id="aerr"></div><button class="btn dark big" type="submit">' + (mode === 'signup' ? t('create_account') : t('login')) + '</button></form>' +
+    '<p class="small muted center" style="margin:0">' + t('staff_login_hint') + '</p>' +
+    '<p class="small muted center" style="margin:0">' + t('forgot_pin_biz') + '</p>' +
+    '<div class="ver">ShopSathi Business v' + SS.VERSION + '</div></main></div>';
+  SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); renderAuth(mode); };
+  SS.$$('[data-m]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.m)));
+  SS.$('#af').onsubmit = async (e) => {
+    e.preventDefault();
+    const mb = SS.$('#mb').value.trim(), pn = SS.$('#pn').value.trim();
+    const err = (m) => (SS.$('#aerr').innerHTML = '<div class="err">' + esc(m) + '</div>');
+    if (!SS.validMobile(mb)) return err(t('err_mobile'));
+    if (!SS.validPin(pn)) return err(t('err_pin'));
+    try {
+      SS.busy(true);
+      if (mode === 'signup') {
+        const nm = SS.$('#nm').value.trim();
+        if (nm.length < 2) { SS.busy(false); return err(t('err_name')); }
+        B.pendingSignup = { name: nm };
+        await SS.signup(mb, pn);
+      } else await SS.login(mb, pn);
+    } catch (ex) { err(SS.authErr(ex)); }
+    finally { SS.busy(false); }
+  };
+}
+
+async function onLogin(u) {
+  B.user = u; B.mobile = SS.mobileOf(u);
+  const uref = SS.db.collection('users').doc(u.uid);
+  let snap = null;
+  try { snap = await uref.get(); } catch (e) { snap = await uref.get({ source: 'cache' }).catch(() => null); }
+  if (!snap || !snap.exists) {
+    B.profile = { name: (B.pendingSignup && B.pendingSignup.name) || '', mobile: B.mobile, lang: SS.lang(), createdAt: SS.now() };
+    await uref.set(B.profile, { merge: true }).catch(() => {});
+  } else {
+    B.profile = snap.data();
+    if (B.profile.lang && B.profile.lang !== SS.lang()) SS.setLang(B.profile.lang);
+  }
+  B.pendingSignup = null;
+  const sid = B.profile.ownShop || B.profile.staffShop;
+  if (!sid) return renderWizard();
+  let sh;
+  try { sh = await SS.db.collection('shops').doc(sid).get(); } catch (e) { return renderNoAccess(SS.authErr(e)); }
+  if (!sh.exists) { if (B.profile.ownShop) return renderWizard(); return renderNoAccess(t('staff_removed')); }
+  const d = sh.data();
+  B.shopId = sid; B.shop = d;
+  if (d.ownerUid === u.uid) B.role = 'owner';
+  else if ((d.staffUids || []).indexOf(u.uid) >= 0) B.role = 'staff';
+  else return renderNoAccess(t('staff_removed'));
+  SS.askNotify();
+  start();
+}
+function renderNoAccess(msg) {
+  cleanup();
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + SS.wordmark(28) + '</div><main class="page"><div class="err">' + esc(msg) + '</div><button class="btn dark big" id="lo">' + ic('logout') + t('logout') + '</button></main></div>';
+  SS.$('#lo').onclick = () => SS.logout();
+}
+
+/* ---------------- Setup wizard ---------------- */
+const W = { step: 1, data: null };
+function wizDefaults() {
+  const sc = SS.defaultScheme();
+  return {
+    name: '', ownerName: B.profile.name || '', type: 'kirana', city: '', address: '', logo: '', shortCode: '',
+    pointsMode: 'percent', percent: 0.25, rupeesPerPoint: 100, minBill: 100, uploadDays: 7,
+    schemeStart: sc.start, schemeEnd: sc.end, settlementDate: sc.settle,
+    welcomeBonus: 0, referBonus: 0, birthdayDouble: false, festival2x: false,
+    goldSpend: 10000, goldMult: 1.1, platSpend: 25000, platMult: 1.25, gifts: []
+  };
+}
+function renderWizard() {
+  cleanup();
+  if (!W.data) W.data = wizDefaults();
+  const s = W.step, d = W.data;
+  const steps = '<div class="steps" aria-label="Step ' + s + '/5">' + [1, 2, 3, 4, 5].map((i) => '<i class="' + (i <= s ? 'on' : '') + '"></i>').join('') + '</div>';
+  const titles = ['', t('wz1'), t('wz2'), t('wz3'), t('wz4'), t('wz5')];
+  let body = '';
+  if (s === 1) body = groupHTML('shop', d);
+  if (s === 2) body = groupHTML('brand', d) + '<label class="f">' + t('short_code') + ' <small>' + t('short_code_hint') + '</small><input class="inp" id="f_shortCode" maxlength="4" value="' + esc(d.shortCode || initials(d.name)) + '" style="text-transform:uppercase;font-weight:700;letter-spacing:2px"></label>';
+  if (s === 3) body = groupHTML('points', d);
+  if (s === 4) body = groupHTML('scheme', d) + groupHTML('bonus', d) + groupHTML('levels', d);
+  if (s === 5) body = '<p class="muted" style="margin:0">' + t('wz5_help') + '</p><div class="list" id="wg">' + d.gifts.map((g, i) => '<div class="item" style="cursor:default"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(g.name) + '</b><span>' + SS.fmtPts(g.points) + ' pts</span></span><button class="iconbtn" data-rmg="' + i + '" aria-label="' + t('delete') + '">' + ic('trash', 18) + '</button></div>').join('') + '</div>' +
+    '<div class="row"><input class="inp grow" id="gn" placeholder="' + t('gift_name') + '"><input class="inp" id="gp" type="number" inputmode="decimal" placeholder="' + t('points') + '" style="width:110px"></div><button class="btn light" id="ga">' + ic('plus') + t('add_gift') + '</button>';
+  app.innerHTML = '<div class="authwrap"><header class="mhdr"><div class="top">' + SS.logo(40) + '<div class="brand"><b><span>Shop</span>Sathi</b><small>' + t('setup') + ' · ' + t('step_of', { a: s, b: 5 }) + '</small></div></div>' + steps + '<div class="hello">' + titles[s] + '</div></header>' +
+    '<main class="page" style="padding-bottom:30px"><form id="wf" class="col">' + body + '<div id="werr"></div><div class="btnrow">' +
+    (s > 1 ? '<button type="button" class="btn light" id="prev">' + ic('back') + t('back') + '</button>' : '<button type="button" class="btn light" id="lo">' + ic('logout') + t('logout') + '</button>') +
+    '<button type="submit" class="btn dark">' + (s < 5 ? t('next') : t('finish')) + '</button></div></form></main></div>';
+  bindGroup(app);
+  const prev = SS.$('#prev'); if (prev) prev.onclick = () => { collectWiz(); W.step--; renderWizard(); };
+  const lo = SS.$('#lo'); if (lo) lo.onclick = () => SS.logout();
+  if (s === 5) {
+    SS.$('#ga').onclick = () => {
+      const n = SS.$('#gn').value.trim(), p = SS.num(SS.$('#gp').value);
+      if (!n || !(p > 0)) return SS.toast(t('err_gift'), 'err');
+      d.gifts.push({ name: n, points: p }); renderWizard();
+    };
+    SS.$$('[data-rmg]').forEach((b) => (b.onclick = () => { d.gifts.splice(Number(b.dataset.rmg), 1); renderWizard(); }));
+  }
+  SS.$('#wf').onsubmit = (e) => {
+    e.preventDefault();
+    const er = collectWiz();
+    if (er) { SS.$('#werr').innerHTML = '<div class="err">' + esc(er) + '</div>'; return; }
+    if (s < 5) { W.step++; renderWizard(); window.scrollTo(0, 0); } else createShop();
+  };
+}
+function collectWiz() {
+  const s = W.step, d = W.data;
+  const groups = { 1: ['shop'], 2: ['brand'], 3: ['points'], 4: ['scheme', 'bonus', 'levels'], 5: [] }[s];
+  for (const g of groups) { const r = readGroup(g, app, d); if (r) return r; }
+  if (s === 2) {
+    const sc = (SS.$('#f_shortCode').value || '').toUpperCase().replace(/[^A-Z]/g, '');
+    if (sc.length < 2) return t('err_short');
+    d.shortCode = sc;
+  }
+  return '';
+}
+function initials(name) {
+  const w = String(name || '').toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!w.length) return 'SS';
+  return (w.length === 1 ? w[0].slice(0, 2) : w[0][0] + w[1][0]).slice(0, 4);
+}
+async function createShop() {
+  const d = W.data;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  try {
+    SS.busy(true);
+    let id = '';
+    for (let i = 0; i < 6; i++) {
+      let c = d.shortCode;
+      for (let j = 0; j < 3; j++) c += chars[Math.floor(Math.random() * chars.length)];
+      const ex = await SS.db.collection('shops').doc(c).get();
+      if (!ex.exists) { id = c; break; }
+    }
+    if (!id) throw new Error('code');
+    const shop = {
+      name: d.name, ownerName: d.ownerName, mobile: B.mobile, type: d.type, city: d.city, address: d.address, logo: d.logo || '',
+      shortCode: d.shortCode, ownerUid: B.user.uid, staffUids: [], staff: {},
+      pointsMode: d.pointsMode, percent: d.percent, rupeesPerPoint: d.rupeesPerPoint, minBill: d.minBill, uploadDays: d.uploadDays,
+      schemeStart: d.schemeStart, schemeEnd: d.schemeEnd, settlementDate: d.settlementDate, schemeNo: 1,
+      welcomeBonus: d.welcomeBonus, referBonus: d.referBonus, birthdayDouble: d.birthdayDouble, festival2x: d.festival2x,
+      goldSpend: d.goldSpend, goldMult: d.goldMult, platSpend: d.platSpend, platMult: d.platMult,
+      plan: 'free', paidUntil: 0, active: true, customerCount: 0, nextCode: 1, createdAt: SS.now()
+    };
+    await SS.db.collection('shops').doc(id).set(shop);
+    await SS.db.collection('users').doc(B.user.uid).set({ ownShop: id, name: d.ownerName }, { merge: true });
+    const gref = SS.db.collection('shops').doc(id).collection('gifts');
+    for (let i = 0; i < d.gifts.length; i++) await gref.add({ name: d.gifts[i].name, points: d.gifts[i].points, photo: '', stock: -1, active: true, at: SS.now() + i });
+    B.profile.ownShop = id; B.shopId = id; B.shop = shop; B.role = 'owner';
+    W.data = null; W.step = 1;
+    SS.toast(t('shop_created'), 'ok');
+    B.view = { name: 'qr' };
+    start();
+  } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+  finally { SS.busy(false); }
+}
+
+/* ---- settings field groups (wizard + settings page) ---- */
+function groupHTML(g, d) {
+  const inp = (k, label, type, extra) => '<label class="f">' + label + (extra && extra.hint ? ' <small>' + extra.hint + '</small>' : '') + '<input class="inp" id="f_' + k + '" type="' + (type || 'text') + '"' + (type === 'number' ? ' inputmode="decimal" step="any" min="0"' : '') + ' value="' + esc(type === 'date' ? SS.isoDate(d[k]) : d[k] == null ? '' : d[k]) + '"></label>';
+  const chk = (k, label) => '<label class="chk"><input type="checkbox" id="f_' + k + '"' + (d[k] ? ' checked' : '') + '>' + label + '</label>';
+  if (g === 'shop') return inp('name', t('shop_name')) + inp('ownerName', t('owner_name')) +
+    '<label class="f">' + t('shop_type') + '<select class="inp" id="f_type">' + TYPES.map((x) => '<option value="' + x + '"' + (d.type === x ? ' selected' : '') + '>' + t('type_' + x) + '</option>').join('') + '</select></label>' +
+    inp('city', t('city')) + inp('address', t('address'), 'text', { hint: t('optional') });
+  if (g === 'brand') return '<label class="f">' + t('logo') + ' <small>' + t('optional') + '</small></label><input type="file" accept="image/*" id="f_logofile" class="hidden"><div class="photo-pick" id="logopick" style="min-height:120px">' + (d.logo ? '<img alt="" src="' + d.logo + '" style="max-height:110px">' : ic('image', 36) + '<span>' + t('add_logo') + '</span>') + '</div><input type="hidden" id="f_logo" value="' + esc(d.logo || '') + '">';
+  if (g === 'points') return '<div class="f" style="font-size:14px;font-weight:600;color:#33373C">' + t('points_method') + '</div><div class="seg" id="pmode"><button type="button" data-pm="percent" class="' + (d.pointsMode !== 'fixed' ? 'on' : '') + '">' + t('pm_percent') + '</button><button type="button" data-pm="fixed" class="' + (d.pointsMode === 'fixed' ? 'on' : '') + '">' + t('pm_fixed') + '</button></div><input type="hidden" id="f_pointsMode" value="' + (d.pointsMode === 'fixed' ? 'fixed' : 'percent') + '">' +
+    '<div id="pm_percent" class="' + (d.pointsMode === 'fixed' ? 'hidden' : '') + '">' + inp('percent', t('percent_lbl'), 'number', { hint: t('percent_hint') }) + '</div>' +
+    '<div id="pm_fixed" class="' + (d.pointsMode === 'fixed' ? '' : 'hidden') + '">' + inp('rupeesPerPoint', t('rupees_lbl'), 'number', { hint: t('rupees_hint') }) + '</div>' +
+    '<div class="small muted" id="pm_ex"></div>' +
+    inp('minBill', t('min_bill'), 'number', { hint: t('min_bill_hint') }) + inp('uploadDays', t('upload_days'), 'number', { hint: t('upload_days_hint') });
+  if (g === 'scheme') return '<b>' + t('scheme') + '</b>' + inp('schemeStart', t('scheme_start'), 'date') + inp('schemeEnd', t('scheme_end'), 'date') + inp('settlementDate', t('settle_date'), 'date', { hint: t('settle_hint') });
+  if (g === 'bonus') return '<b>' + t('bonus_points') + '</b>' + inp('welcomeBonus', t('welcome_bonus'), 'number', { hint: t('zero_off') }) + inp('referBonus', t('refer_bonus'), 'number', { hint: t('refer_bonus_hint') }) + chk('birthdayDouble', t('birthday_double')) + chk('festival2x', t('festival_2x'));
+  if (g === 'levels') return '<b>' + t('levels') + '</b><div class="small muted">' + t('levels_hint') + '</div>' +
+    '<div class="row">' + inp('goldSpend', t('gold_from'), 'number') + inp('goldMult', t('multiplier'), 'number') + '</div>' +
+    '<div class="row">' + inp('platSpend', t('plat_from'), 'number') + inp('platMult', t('multiplier'), 'number') + '</div>';
+  return '';
+}
+function bindGroup(root) {
+  const lp = SS.$('#logopick', root);
+  if (lp) {
+    lp.onclick = () => SS.$('#f_logofile', root).click();
+    SS.$('#f_logofile', root).onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const data = await SS.compress(f, 256, 30);
+      SS.$('#f_logo', root).value = data; lp.innerHTML = '<img alt="" src="' + data + '" style="max-height:110px">';
+    };
+  }
+  const pm = SS.$('#pmode', root);
+  if (pm) {
+    const ex = () => {
+      const mode = SS.$('#f_pointsMode', root).value;
+      const fake = { pointsMode: mode, percent: SS.num(SS.$('#f_percent', root).value), rupeesPerPoint: SS.num(SS.$('#f_rupeesPerPoint', root).value), minBill: 0 };
+      SS.$('#pm_ex', root).textContent = t('pm_example', { p: SS.fmtPts(SS.calcPoints(fake, 1000, null).points) });
+    };
+    SS.$$('[data-pm]', pm).forEach((b) => (b.onclick = () => {
+      SS.$$('[data-pm]', pm).forEach((x) => x.classList.toggle('on', x === b));
+      SS.$('#f_pointsMode', root).value = b.dataset.pm;
+      SS.$('#pm_percent', root).classList.toggle('hidden', b.dataset.pm !== 'percent');
+      SS.$('#pm_fixed', root).classList.toggle('hidden', b.dataset.pm !== 'fixed');
+      ex();
+    }));
+    SS.$('#f_percent', root).oninput = ex; SS.$('#f_rupeesPerPoint', root).oninput = ex; ex();
+  }
+}
+function readGroup(g, root, d) {
+  const v = (k) => { const el = SS.$('#f_' + k, root); return el ? el.value.trim() : ''; };
+  const n = (k) => SS.num(v(k));
+  const c = (k) => { const el = SS.$('#f_' + k, root); return !!(el && el.checked); };
+  if (g === 'shop') {
+    d.name = v('name'); d.ownerName = v('ownerName'); d.type = v('type'); d.city = v('city'); d.address = v('address');
+    if (d.name.length < 2) return t('err_shop_name');
+    if (d.ownerName.length < 2) return t('err_name');
+  }
+  if (g === 'brand') d.logo = v('logo');
+  if (g === 'points') {
+    d.pointsMode = v('pointsMode') === 'fixed' ? 'fixed' : 'percent';
+    d.percent = n('percent'); d.rupeesPerPoint = n('rupeesPerPoint'); d.minBill = n('minBill'); d.uploadDays = Math.round(n('uploadDays'));
+    if (d.pointsMode === 'percent' && !(d.percent > 0 && d.percent <= 100)) return t('err_percent');
+    if (d.pointsMode === 'fixed' && !(d.rupeesPerPoint > 0)) return t('err_rupees');
+    if (!(d.uploadDays >= 1)) return t('err_days');
+  }
+  if (g === 'scheme') {
+    d.schemeStart = SS.fromIso(v('schemeStart')); d.schemeEnd = SS.fromIso(v('schemeEnd')); d.settlementDate = SS.fromIso(v('settlementDate'));
+    if (!d.schemeStart || !d.schemeEnd || d.schemeEnd < d.schemeStart) return t('err_scheme_dates');
+    if (!d.settlementDate || d.settlementDate < d.schemeEnd) return t('err_settle_date');
+  }
+  if (g === 'bonus') { d.welcomeBonus = n('welcomeBonus'); d.referBonus = n('referBonus'); d.birthdayDouble = c('birthdayDouble'); d.festival2x = c('festival2x'); }
+  if (g === 'levels') {
+    d.goldSpend = n('goldSpend'); d.goldMult = n('goldMult') || 1; d.platSpend = n('platSpend'); d.platMult = n('platMult') || 1;
+    if (d.platSpend && d.goldSpend && d.platSpend <= d.goldSpend) return t('err_levels');
+  }
+  return '';
+}
+
+/* ---------------- Main listeners ---------------- */
+function start() {
+  cleanup();
+  const sref = shopRef();
+  const onErr = (e) => console.warn(e);
+  B.unsub.push(sref.onSnapshot((d) => {
+    if (!d.exists) { if (!d.metadata.fromCache) { cleanup(); if (isOwner()) { B.profile.ownShop = null; renderWizard(); } else renderNoAccess(t('staff_removed')); } return; }
+    B.shop = d.data();
+    if (B.role === 'staff' && (B.shop.staffUids || []).indexOf(B.user.uid) < 0) { cleanup(); return renderNoAccess(t('staff_removed')); }
+    render();
+  }, onErr));
+  B.unsub.push(sref.collection('members').onSnapshot((q) => {
+    B.members = SS.docs(q); B.memMap = {}; B.members.forEach((m) => (B.memMap[m.id] = m)); render();
+  }, onErr));
+  B.unsub.push(sref.collection('bills').where('status', '==', 'pending').onSnapshot((q) => {
+    const list = SS.docs(q).sort((a, b) => a.uploadedAt - b.uploadedAt);
+    if (B.seenPending) { const fresh = list.filter((b) => !B.seenPending.has(b.id)); if (fresh.length) SS.notify(t('n_new_bill_t'), t('n_new_bill_b', { n: fresh.length, c: fresh[0].memberName || fresh[0].memberCode })); }
+    B.seenPending = new Set(list.map((b) => b.id));
+    B.pending = list; render();
+  }, onErr));
+  B.unsub.push(sref.collection('gifts').onSnapshot((q) => { B.gifts = SS.docs(q).sort((a, b) => a.points - b.points); render(); }, onErr));
+  B.unsub.push(sref.collection('redemptions').where('status', '==', 'requested').onSnapshot((q) => { B.reds = SS.docs(q).sort((a, b) => a.at - b.at); render(); }, onErr));
+  loadMonthStats();
+  render();
+}
+async function loadMonthStats() {
+  const now = new Date();
+  const s = SS.monthStart(now.getFullYear(), now.getMonth());
+  try {
+    const q = await shopRef().collection('bills').where('approvedAt', '>=', s).get();
+    const ap = SS.docs(q).filter((b) => b.status === 'approved');
+    B.monthStats = { sales: ap.reduce((a, b) => a + (b.finalAmount || 0), 0), points: ap.reduce((a, b) => a + (b.points || 0), 0), count: ap.length };
+    render();
+  } catch (e) { console.warn(e); }
+}
+
+/* ---------------- Render ---------------- */
+let rq = 0;
+function render() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; draw(); }); }
+function draw() {
+  if (!B.shop) return;
+  if (B.drawing && B.drawing()) return; // ek sheet/form khula hai to background redraw mat karo
+  if (!B.shop.active) return drawLocked();
+  const y = window.scrollY;
+  let html;
+  if (B.view) html = ({ cust: vCustomer, reports: vReports, settings: vSettings, staff: vStaff, qr: vQR }[B.view.name] || vHome)();
+  else html = ({ home: vHome, bills: vBills, customers: vCustomers, gifts: vGifts, more: vMore }[B.tab] || vHome)();
+  app.innerHTML = html + (B.view ? '' : navHTML());
+  bindAll();
+  if (B.keepScroll !== false) window.scrollTo(0, y);
+  B.keepScroll = true;
+}
+function go(tab) { B.tab = tab; B.view = null; B.keepScroll = false; draw(); }
+function open(view) { B.view = view; B.keepScroll = false; draw(); }
+function navHTML() {
+  const b = (k, icn, lbl, n) => '<button class="' + (B.tab === k ? 'on' : '') + '" data-tab="' + k + '">' + ic(icn, 24) + lbl + (n ? '<span class="dot">' + n + '</span>' : '') + '</button>';
+  return '<nav class="bnav">' + b('home', 'home', t('nav_home')) + b('bills', 'receipt', t('nav_bills'), B.pending.length) + b('customers', 'users', t('nav_customers')) + b('gifts', 'gift', t('nav_gifts'), B.reds.length) + b('more', 'more', t('nav_more')) + '</nav>';
+}
+function topRow() {
+  return '<div class="top">' + (B.shop.logo ? '<img alt="" src="' + B.shop.logo + '" style="width:40px;height:40px;border-radius:10px;object-fit:cover;border:1px solid #D9A833">' : SS.logo(40)) +
+    '<div class="brand"><b><span>Shop</span>Sathi</b><small>' + esc(B.shop.name) + (B.role === 'staff' ? '<span class="rolebadge">' + t('staff') + '</span>' : '') + '</small></div>' +
+    '<button class="iconbtn" data-tab="bills" aria-label="' + t('pending_bills') + '">' + ic('bell') + (B.pending.length ? '<span class="dot">' + B.pending.length + '</span>' : '') + '</button></div>';
+}
+function sub(title, right) {
+  return '<div class="subhdr"><button class="iconbtn" id="back" aria-label="' + t('back') + '">' + ic('back') + '</button><h2 class="ellipsis">' + esc(title) + '</h2>' + (right || '') + '</div>';
+}
+function tabHdr(title) { return '<header class="mhdr" style="padding-bottom:16px">' + topRow() + '<div class="hello">' + esc(title) + '</div></header>'; }
+function drawLocked() {
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + '<b>' + esc(B.shop.name) + '</b></div><main class="page"><div class="err">' + ic('lock', 18) + ' ' + t('shop_locked') + '</div>' +
+    '<a class="btn gold big" href="' + SS.wa(SS.CFG.adminWhatsApp ? '' : '', '') + '" id="wa">' + ic('wa') + t('contact_admin') + '</a><button class="btn light big" id="lo">' + ic('logout') + t('logout') + '</button></main></div>';
+  SS.$('#wa').href = 'https://wa.me/' + (SS.CFG.adminWhatsApp || '') + '?text=' + encodeURIComponent('ShopSathi ' + B.shopId + ' — ' + B.shop.name);
+  SS.$('#lo').onclick = () => SS.logout();
+}
+
+/* ---------------- Home ---------------- */
+function vHome() {
+  const sh = B.shop;
+  const days = SS.daysLeft(sh.schemeEnd);
+  const total = Math.max(1, sh.schemeEnd - sh.schemeStart);
+  const pct = Math.min(100, Math.max(0, ((SS.now() - sh.schemeStart) / total) * 100));
+  const ms = B.monthStats;
+  const limit = SS.CFG.freeLimit || 50;
+  let notes = '';
+  if (sh.plan !== 'paid' && (sh.customerCount || 0) >= limit - 5) notes += '<div class="warn">' + t('plan_near', { n: sh.customerCount || 0, l: limit }) + ' <button class="lnk" id="upg">' + t('upgrade') + '</button></div>';
+  if (sh.plan === 'paid' && sh.paidUntil && sh.paidUntil < SS.now()) notes += '<div class="warn">' + t('plan_expired') + ' <button class="lnk" id="upg">' + t('renew') + '</button></div>';
+  if (SS.now() > SS.dayEnd(sh.schemeEnd)) notes += '<div class="warn">' + t('biz_scheme_over') + '</div>';
+  if (sh.festival2x) notes += '<div class="okbox">' + ic('star', 18) + ' ' + t('festival_on_biz') + '</div>';
+  const name = B.role === 'owner' ? sh.ownerName : (sh.staff && sh.staff[B.user.uid] && sh.staff[B.user.uid].name) || B.profile.name || '';
+  return '<header class="mhdr">' + topRow() +
+    '<div class="hello">' + t('namaste') + ', ' + esc(String(name).split(' ')[0]) + '</div>' +
+    '<div class="bigpts"><div style="display:flex;flex-direction:column;line-height:1"><span class="lbl">' + t('pending_bills') + '</span><span class="num">' + B.pending.length + '</span></div><span class="pill-dark">' + (SS.now() < SS.dayStart(sh.schemeStart) ? t('starts_on', { d: SS.fmtDate(sh.schemeStart) }) : SS.now() > SS.dayEnd(sh.schemeEnd) ? t('scheme_over') : t('days_left', { n: days })) + '</span></div>' +
+    '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+    '<div style="font-size:14px">' + t('scheme') + ': ' + SS.fmtDate(sh.schemeStart) + ' – ' + SS.fmtDateFull(sh.schemeEnd) + '</div></header>' +
+    '<main class="page">' + notes +
+    '<button class="btn dark big" data-tab="bills">' + ic('receipt') + t('check_bills') + (B.pending.length ? ' (' + B.pending.length + ')' : '') + '</button>' +
+    '<div class="stats">' +
+    '<button class="stat" data-tab="customers"><b>' + (sh.customerCount || B.members.length) + (sh.plan !== 'paid' ? '<span class="small muted">/' + limit + '</span>' : '') + '</b><span>' + t('customers') + '</span></button>' +
+    '<button class="stat" data-tab="gifts"><b>' + B.reds.length + '</b><span>' + t('gift_requests') + '</span></button>' +
+    '<div class="stat" style="cursor:default"><b style="font-size:20px">' + (ms ? SS.fmtRs(Math.round(ms.sales)) : '…') + '</b><span>' + t('month_sales') + '</span></div>' +
+    '<div class="stat" style="cursor:default"><b style="font-size:20px">' + (ms ? SS.fmtPts(ms.points) : '…') + '</b><span>' + t('month_points') + '</span></div></div>' +
+    '<div class="tiles">' +
+    '<button class="tile" id="scanc"><span class="c g">' + ic('scan') + '</span>' + t('scan_customer') + '</button>' +
+    '<button class="tile" id="addc"><span class="c">' + ic('plus') + '</span>' + t('add_customer') + '</button>' +
+    '<button class="tile" data-view="qr"><span class="c">' + ic('qr') + '</span>' + t('shop_qr') + '</button>' +
+    '<button class="tile" data-view="reports"><span class="c">' + ic('chart') + '</span>' + t('reports') + '</button></div>' +
+    '<div class="small muted center">' + t('shop_code') + ': <b style="color:#1F2226;letter-spacing:1px">' + esc(B.shopId) + '</b> · ' + esc(SS.ruleText(sh)) + '</div>' +
+    '</main>';
+}
+
+/* ---------------- Bills ---------------- */
+function billItem(b, showStatus) {
+  const m = B.memMap[b.memberId] || {};
+  const pill = !showStatus ? '<span class="pill pend">' + t('st_pending') + '</span>' : b.status === 'approved' ? '<span class="pill ok">' + t('st_approved') + '</span>' : b.status === 'rejected' ? '<span class="pill rej">' + t('st_rejected') + '</span>' : '<span class="pill pend">' + t('st_pending') + '</span>';
+  return '<button class="item" data-bill="' + b.id + '"><span class="ic">' + (b.thumb ? '<img alt="" src="' + b.thumb + '">' : ic('receipt', 20)) + '</span>' +
+    '<span class="t"><b>' + SS.fmtRs(b.status === 'approved' ? b.finalAmount : b.amount) + ' · ' + esc(b.memberName || m.name || '') + '</b><span>' + esc(b.memberCode || '') + ' · ' + SS.fmtDate(b.billDate) + (b.status === 'approved' ? ' · +' + SS.fmtPts(b.points) : '') + '</span></span>' + pill + '</button>';
+}
+function vBills() {
+  const mode = B.billMode || 'pending';
+  let list = '';
+  if (mode === 'pending') list = B.pending.length ? B.pending.map((b) => billItem(b, false)).join('') : '<div class="empty">' + ic('check', 30) + '<br>' + t('no_pending') + '</div>';
+  else list = B.recent ? (B.recent.length ? B.recent.map((b) => billItem(b, true)).join('') : '<div class="empty">' + t('no_bills') + '</div>') : '<div class="empty">' + t('loading') + '</div>';
+  return tabHdr(t('nav_bills')) + '<main class="page"><div class="seg"><button data-bm="pending" class="' + (mode === 'pending' ? 'on' : '') + '">' + t('st_pending') + ' (' + B.pending.length + ')</button><button data-bm="recent" class="' + (mode === 'recent' ? 'on' : '') + '">' + t('recent') + '</button></div>' +
+    '<div class="list">' + list + '</div></main>';
+}
+async function loadRecent() {
+  try {
+    const q = await shopRef().collection('bills').orderBy('uploadedAt', 'desc').limit(100).get();
+    B.recent = SS.docs(q); render();
+  } catch (e) { B.recent = []; SS.toast(SS.authErr(e), 'err'); render(); }
+}
+function findBill(id) { return B.pending.find((b) => b.id === id) || (B.recent || []).find((b) => b.id === id) || (B.custBills || []).find((b) => b.id === id); }
+
+async function openBill(id) {
+  const b = findBill(id);
+  if (!b) return;
+  const m = B.memMap[b.memberId] || {};
+  const sh = B.shop;
+  const pend = b.status === 'pending';
+  const oldDays = Math.floor((SS.dayStart(b.uploadedAt) - SS.dayStart(b.billDate)) / 86400000);
+  let warn = '';
+  if (m.blocked) warn += '<div class="err">' + t('cust_blocked') + '</div>';
+  if (pend && oldDays > (Number(sh.uploadDays) || 0)) warn += '<div class="warn">' + t('w_old', { n: oldDays }) + '</div>';
+  const sheet = SS.sheet(pend ? t('check_bill') : t('bill_detail'),
+    '<div class="photo-pick" id="ph" style="cursor:zoom-in;min-height:200px">' + (b.thumb ? '<img alt="Bill" src="' + b.thumb + '">' : ic('image', 40)) + '</div>' +
+    '<button class="item" id="gocust"><span class="ic">' + ic('user', 20) + '</span><span class="t"><b>' + esc(b.memberName || m.name || '-') + ' <span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></b><span>' + esc(b.memberCode || '') + ' · ' + esc(b.memberId) + ' · ' + SS.fmtPts(m.points || 0) + ' pts</span></span>' + ic('chev') + '</button>' +
+    '<div class="card"><div class="kv"><span>' + t('bill_date') + '</span><b>' + SS.fmtDateFull(b.billDate) + '</b></div>' +
+    (b.billNo ? '<div class="kv"><span>' + t('bill_no') + '</span><b>' + esc(b.billNo) + '</b></div>' : '') +
+    '<div class="kv"><span>' + t('uploaded_at') + '</span><b>' + SS.fmtDT(b.uploadedAt) + '</b></div>' +
+    '<div class="kv"><span>' + t('amount_cust') + '</span><b>' + SS.fmtRs(b.amount) + '</b></div>' +
+    (b.status === 'approved' ? '<div class="kv"><span>' + t('amount_final') + '</span><b>' + SS.fmtRs(b.finalAmount) + '</b></div><div class="kv"><span>' + t('points') + '</span><b>+' + SS.fmtPts(b.points) + '</b></div><div class="kv"><span>' + t('approved_by') + '</span><b>' + esc(b.approvedByName || '-') + '</b></div>' : '') +
+    (b.status === 'rejected' ? '<div class="kv"><span>' + t('reason') + '</span><b>' + esc(b.reason || '-') + '</b></div>' : '') + '</div>' +
+    warn + '<div id="dups"></div>' +
+    (pend ? '<label class="f">' + t('final_amount') + ' <small>' + t('final_amount_hint') + '</small><input class="inp" id="fa" type="number" inputmode="decimal" step="0.01" min="0" value="' + (b.amount || 0) + '" style="font-size:22px;font-weight:700"></label><div class="okbox" id="pv"></div>' +
+      '<div class="btnrow"><button class="btn danger" id="rej">' + ic('x') + t('reject') + '</button><button class="btn gold" id="apr">' + ic('check') + t('approve') + '</button></div>' : ''),
+    {});
+  let full = null;
+  shopRef().collection('photos').doc(id).get().then((d) => { if (d.exists && d.data().data) { full = d.data().data; sheet.el.querySelector('#ph').innerHTML = '<img alt="Bill" src="' + full + '">'; } }).catch(() => {});
+  sheet.el.querySelector('#ph').onclick = () => { if (full || b.thumb) SS.zoom(full || b.thumb); };
+  sheet.el.querySelector('#gocust').onclick = () => { sheet.close(); open({ name: 'cust', id: b.memberId }); };
+  if (!pend) return;
+  // duplicate check
+  (async () => {
+    const found = {};
+    try {
+      if (b.photoHash) (await shopRef().collection('bills').where('photoHash', '==', b.photoHash).limit(5).get()).docs.forEach((d) => { if (d.id !== b.id) found[d.id] = d.data(); });
+      if (b.billNo) (await shopRef().collection('bills').where('billNo', '==', b.billNo).limit(10).get()).docs.forEach((d) => { if (d.id !== b.id) found[d.id] = d.data(); });
+    } catch (e) {}
+    const ids = Object.keys(found);
+    if (ids.length) sheet.el.querySelector('#dups').innerHTML = '<div class="err">' + t('w_dup') + '<br>' + ids.map((k) => esc(found[k].memberCode) + ' · ' + SS.fmtRs(found[k].amount) + ' · ' + SS.fmtDate(found[k].billDate) + ' · ' + t('st_' + found[k].status)).join('<br>') + '</div>';
+  })();
+  const fa = sheet.el.querySelector('#fa');
+  const prev = () => {
+    const c = SS.calcPoints(sh, SS.num(fa.value), m);
+    sheet.el.querySelector('#pv').innerHTML = c.belowMin ? '<span style="color:#9B2C2C">' + t('below_min', { m: SS.fmtRs(sh.minBill) }) + ' — 0 pts</span>' : t('will_get', { p: SS.fmtPts(c.points) }) + (c.notes.length ? ' <span class="small">(' + esc(c.notes.join(', ')) + ')</span>' : '');
+  };
+  fa.oninput = prev; prev();
+  sheet.el.querySelector('#apr').onclick = async () => {
+    const amt = SS.num(fa.value);
+    if (!(amt > 0)) return SS.toast(t('err_amount'), 'err');
+    try { await SS.run(() => creditBill({ billId: b.id, memberId: b.memberId, finalAmount: amt }), t('approved_ok')); sheet.close(); loadMonthStats(); }
+    catch (e) {}
+  };
+  sheet.el.querySelector('#rej').onclick = () => { sheet.close(); askReject(b); };
+}
+function askReject(b) {
+  const s = SS.sheet(t('reject_reason'), '<div class="chips reasons">' + REASONS.map((r) => '<button class="chip" data-r="' + r + '">' + t(r) + '</button>').join('') + '</div><label class="f">' + t('other_reason') + '<input class="inp" id="rr"></label><button class="btn danger big" id="go">' + ic('x') + t('reject') + '</button>');
+  let sel = '';
+  SS.$$('[data-r]', s.el).forEach((c) => (c.onclick = () => { sel = t(c.dataset.r); SS.$$('[data-r]', s.el).forEach((x) => x.classList.toggle('on', x === c)); s.el.querySelector('#rr').value = sel; }));
+  s.el.querySelector('#go').onclick = async () => {
+    const reason = s.el.querySelector('#rr').value.trim() || sel;
+    if (!reason) return SS.toast(t('err_reason'), 'err');
+    try {
+      await SS.run(async () => {
+        const sref = shopRef(), bref = sref.collection('bills').doc(b.id);
+        await SS.db.runTransaction(async (tx) => {
+          const cur = await tx.get(bref);
+          if (!cur.exists || cur.data().status !== 'pending') throw new Error(t('err_already'));
+          tx.update(bref, { status: 'rejected', reason: reason, approvedBy: B.user.uid, approvedByName: whoAmI(), approvedAt: SS.now() });
+          tx.set(sref.collection('members').doc(b.memberId).collection('notifs').doc(), { kind: 'rejected', amount: b.amount, reason: reason, at: SS.now(), read: false });
+        });
+      }, t('rejected_ok'));
+      s.close();
+    } catch (e) {}
+  };
+}
+function whoAmI() { return B.role === 'owner' ? B.shop.ownerName : ((B.shop.staff && B.shop.staff[B.user.uid] && B.shop.staff[B.user.uid].name) || B.profile.name || B.mobile); }
+
+/* points credit: pending bill approve ya naya manual bill — ek transaction mein */
+async function creditBill(o) {
+  const sref = shopRef();
+  const sh = B.shop;
+  const mref = sref.collection('members').doc(o.memberId);
+  const bref = o.billId ? sref.collection('bills').doc(o.billId) : sref.collection('bills').doc();
+  // referral: pehle referrer dhoondo (transaction ke bahar query)
+  let refRef = null;
+  const pre = await mref.get();
+  if (!pre.exists) throw new Error(t('err_cust_nf'));
+  const pm = pre.data();
+  if (pm.referredBy && !pm.referralPaid && Number(sh.referBonus) > 0) {
+    const q = await sref.collection('members').where('code', '==', pm.referredBy).limit(1).get();
+    if (!q.empty && q.docs[0].id !== o.memberId) refRef = q.docs[0].ref;
+  }
+  const now = SS.now();
+  await SS.db.runTransaction(async (tx) => {
+    const m = await tx.get(mref);
+    if (!m.exists) throw new Error(t('err_cust_nf'));
+    if (o.billId) {
+      const cb = await tx.get(bref);
+      if (!cb.exists || cb.data().status !== 'pending') throw new Error(t('err_already'));
+    }
+    const r = refRef ? await tx.get(refRef) : null;
+    const md = m.data();
+    const calc = SS.calcPoints(sh, o.finalAmount, md, now);
+    const pts = calc.points;
+    const newSpend = (Number(md.totalSpend) || 0) + o.finalAmount;
+    let add = pts;
+    const upd = { totalSpend: SS.FV.increment(o.finalAmount), level: SS.levelFor(sh, newSpend), billCount: SS.FV.increment(1), lastBillAt: now };
+    const billUpd = { status: 'approved', finalAmount: o.finalAmount, points: pts, calcNote: calc.notes.join(', '), approvedBy: B.user.uid, approvedByName: whoAmI(), approvedAt: now };
+    if (o.billId) tx.update(bref, billUpd);
+    else tx.set(bref, Object.assign({ memberId: o.memberId, memberName: md.name || '', memberCode: md.code, amount: o.finalAmount, billNo: o.billNo || '', billDate: o.billDate || now, uploadedAt: now, photoHash: o.photoHash || '', thumb: o.thumb || '', hasPhoto: !!o.photo, by: 'shop' }, billUpd));
+    if (o.photo && !o.billId) tx.set(sref.collection('photos').doc(bref.id), { memberId: o.memberId, data: o.photo, at: now });
+    tx.set(sref.collection('ledger').doc(), { memberId: o.memberId, type: 'bill', points: pts, billId: bref.id, amount: o.finalAmount, note: SS.fmtRs(o.finalAmount), at: now });
+    tx.set(mref.collection('notifs').doc(), { kind: 'approved', amount: o.finalAmount, points: pts, at: now, read: false });
+    if (r && r.exists && !md.referralPaid) {
+      const rb = Number(sh.referBonus) || 0;
+      add += rb;
+      upd.referralPaid = true;
+      tx.update(r.ref, { points: SS.FV.increment(rb), lifetimePoints: SS.FV.increment(rb) });
+      tx.set(sref.collection('ledger').doc(), { memberId: o.memberId, type: 'referral', points: rb, note: md.referredBy, at: now });
+      tx.set(sref.collection('ledger').doc(), { memberId: r.id, type: 'referral', points: rb, note: md.code + ' ' + (md.name || ''), at: now });
+      tx.set(mref.collection('notifs').doc(), { kind: 'referral', points: rb, at: now, read: false });
+      tx.set(r.ref.collection('notifs').doc(), { kind: 'referral', points: rb, name: md.name || md.code, at: now, read: false });
+    }
+    upd.points = SS.FV.increment(add);
+    upd.lifetimePoints = SS.FV.increment(add);
+    tx.update(mref, upd);
+  });
+}
+
+/* ---------------- Customers ---------------- */
+function vCustomers() {
+  const q = B.custQuery.toLowerCase();
+  let list = B.members.filter((m) => !q || (m.name || '').toLowerCase().indexOf(q) >= 0 || m.id.indexOf(q) >= 0 || (m.code || '').toLowerCase().indexOf(q) >= 0);
+  if (B.custSort === 'points') list.sort((a, b) => (b.points || 0) - (a.points || 0));
+  else if (B.custSort === 'blocked') list = list.filter((m) => m.blocked);
+  else list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const chip = (k, l) => '<button class="chip ' + (B.custSort === k ? 'on' : '') + '" data-cs="' + k + '">' + l + '</button>';
+  return tabHdr(t('customers') + ' (' + B.members.length + ')') + '<main class="page">' +
+    '<div class="btnrow"><button class="btn light sm" id="scanc">' + ic('scan', 18) + t('scan_qr') + '</button><button class="btn dark sm" id="addc">' + ic('plus', 18) + t('add_customer') + '</button></div>' +
+    '<div class="search">' + ic('search', 20) + '<input class="inp" id="cq" type="search" placeholder="' + t('search_cust') + '" value="' + esc(B.custQuery) + '" aria-label="' + t('search_cust') + '"></div>' +
+    '<div class="chips">' + chip('name', t('sort_name')) + chip('points', t('sort_points')) + chip('blocked', t('blocked')) + '</div>' +
+    '<div class="list" id="clist">' + custRows(list) + '</div></main>';
+}
+function custRows(list) {
+  if (!list.length) return '<div class="empty">' + t('no_customers') + '</div>';
+  return list.slice(0, 300).map((m) => '<button class="item" data-cust="' + esc(m.id) + '"><span class="ic">' + ic(m.appUser ? 'user' : 'phone', 20) + '</span><span class="t"><b>' + esc(m.name || '-') + (m.blocked ? ' <span class="pill rej">' + t('blocked') + '</span>' : '') + '</b><span>' + esc(m.code) + ' · ' + esc(m.id) + '</span></span><span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px"><b>' + SS.fmtPts(m.points) + '</b><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></span></button>').join('');
+}
+function vCustomer() {
+  const m = B.memMap[B.view.id];
+  if (!m) return sub(t('customers')) + '<main class="page"><div class="empty">' + t('err_cust_nf') + '</div></main>';
+  const ng = SS.nextGift(B.gifts, m.points || 0);
+  const tab = B.view.tab || 'bills';
+  const seg = (k, l) => '<button data-ct="' + k + '" class="' + (tab === k ? 'on' : '') + '">' + l + '</button>';
+  let rows = '<div class="empty">' + t('loading') + '</div>';
+  if (B.custData && B.custData.id === m.id) {
+    if (tab === 'bills') rows = B.custBills.length ? B.custBills.map((b) => billItem(b, true)).join('') : '<div class="empty">' + t('no_bills') + '</div>';
+    if (tab === 'ledger') rows = B.custData.ledger.length ? B.custData.ledger.map((l) => '<div class="item" style="cursor:default"><span class="ic">' + ic(l.points >= 0 ? 'plus' : 'gift', 20) + '</span><span class="t"><b>' + esc(t('lg_' + l.type)) + '</b><span>' + SS.fmtDT(l.at) + (l.note ? ' · ' + esc(l.note) : '') + '</span></span><b style="color:' + (l.points >= 0 ? '#1E6B3A' : '#9B2C2C') + '">' + (l.points >= 0 ? '+' : '') + SS.fmtPts(l.points) + '</b></div>').join('') : '<div class="empty">' + t('no_history') + '</div>';
+    if (tab === 'gifts') rows = B.custData.reds.length ? B.custData.reds.map((r) => '<div class="item" style="cursor:default"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(r.giftName) + '</b><span>' + SS.fmtDate(r.at) + ' · ' + SS.fmtPts(r.points) + ' pts</span></span><span class="pill ' + (r.status === 'given' ? 'ok' : r.status === 'requested' ? 'pend' : 'rej') + '">' + t('rd_' + r.status) + '</span></div>').join('') : '<div class="empty">' + t('no_gift_reqs') + '</div>';
+  }
+  const waText = t('wa_cust_msg', { n: (m.name || '').split(' ')[0], s: B.shop.name, p: SS.fmtPts(m.points || 0), c: m.code });
+  return sub(m.name || m.code) + '<main class="page" style="padding-top:6px">' +
+    '<div class="card col"><div class="between"><div><div class="small muted">' + t('reward_points') + '</div><b style="font-size:34px;line-height:1">' + SS.fmtPts(m.points || 0) + '</b></div><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></div>' +
+    (ng.next ? '<div class="bar light"><i style="width:' + Math.min(100, ((m.points || 0) / ng.next.points) * 100) + '%"></i></div><div class="small muted">' + t('next_gift', { g: esc(ng.next.name), p: ng.next.points, n: SS.fmtPts(ng.next.points - (m.points || 0)) }) + '</div>' : '') +
+    (ng.best ? '<div class="okbox">' + t('can_get', { g: esc(ng.best.name) }) + '</div>' : '') +
+    '<div class="kv"><span>' + t('cust_code') + '</span><b>' + esc(m.code) + '</b></div><div class="kv"><span>' + t('mobile') + '</span><b>' + esc(m.id) + '</b></div>' +
+    '<div class="kv"><span>' + t('total_purchase') + '</span><b>' + SS.fmtRs(m.totalSpend || 0) + ' (' + (m.billCount || 0) + ' ' + t('bills_word') + ')</b></div>' +
+    '<div class="kv"><span>' + t('joined_on') + '</span><b>' + SS.fmtDateFull(m.joinedAt) + '</b></div>' +
+    '<div class="kv"><span>' + t('app') + '</span><b>' + (m.appUser ? t('yes') : t('no_smartphone')) + '</b></div>' +
+    (m.referredBy ? '<div class="kv"><span>' + t('referred_by') + '</span><b>' + esc(m.referredBy) + (m.referralPaid ? ' ✓' : '') + '</b></div>' : '') +
+    (m.dobMonth ? '<div class="kv"><span>' + t('birth_month') + '</span><b>' + SS.MONTHS[m.dobMonth - 1] + '</b></div>' : '') + '</div>' +
+    (m.blocked ? '<div class="err">' + t('cust_blocked') + '</div>' : '') +
+    '<div class="btnrow"><a class="btn light" href="tel:' + esc(m.id) + '">' + ic('phone') + t('call') + '</a><a class="btn light" target="_blank" rel="noopener" href="' + SS.wa(m.id, waText) + '">' + ic('wa') + 'WhatsApp</a></div>' +
+    '<div class="btnrow"><button class="btn dark" id="addbill">' + ic('plus') + t('add_bill') + '</button>' + (isOwner() ? '<button class="btn ' + (m.blocked ? 'light' : 'danger') + '" id="blk">' + ic('ban') + (m.blocked ? t('unblock') : t('block')) + '</button>' : '') + '</div>' +
+    '<div class="seg">' + seg('bills', t('nav_bills')) + seg('ledger', t('points_history')) + seg('gifts', t('nav_gifts')) + '</div>' +
+    '<div class="list">' + rows + '</div></main>';
+}
+async function loadCust(id) {
+  B.custData = null; B.custBills = [];
+  const sref = shopRef();
+  try {
+    const [bq, lq, rq2] = await Promise.all([
+      sref.collection('bills').where('memberId', '==', id).get(),
+      sref.collection('ledger').where('memberId', '==', id).get(),
+      sref.collection('redemptions').where('memberId', '==', id).get()
+    ]);
+    B.custBills = SS.docs(bq).sort((a, b) => b.uploadedAt - a.uploadedAt);
+    B.custData = { id, ledger: SS.docs(lq).sort((a, b) => b.at - a.at), reds: SS.docs(rq2).sort((a, b) => b.at - a.at) };
+    render();
+  } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+}
+function addCustomer() {
+  const s = SS.sheet(t('add_customer'), '<p class="small muted" style="margin:0">' + t('add_cust_help') + '</p><label class="f">' + t('cust_name') + '<input class="inp" id="cn"></label><label class="f">' + t('mobile') + '<input class="inp" id="cm" type="tel" inputmode="numeric" maxlength="10"></label><label class="f">' + t('birth_month') + ' <small>' + t('optional') + '</small><select class="inp" id="cd">' + SS.MONTH_OPTIONS(0) + '</select></label><button class="btn dark big" id="go">' + ic('plus') + t('add_customer') + '</button>');
+  s.el.querySelector('#go').onclick = async () => {
+    const name = s.el.querySelector('#cn').value.trim(), mob = s.el.querySelector('#cm').value.trim(), dob = Number(s.el.querySelector('#cd').value) || 0;
+    if (name.length < 2) return SS.toast(t('err_name'), 'err');
+    if (!SS.validMobile(mob)) return SS.toast(t('err_mobile'), 'err');
+    if (B.memMap[mob]) { s.close(); open({ name: 'cust', id: mob }); return SS.toast(t('cust_exists')); }
+    try {
+      await SS.run(async () => {
+        const sref = shopRef(), mref = sref.collection('members').doc(mob);
+        let welcome = 0;
+        await SS.db.runTransaction(async (tx) => {
+          const sd = (await tx.get(sref)).data();
+          const ex = await tx.get(mref);
+          if (ex.exists) throw new Error(t('cust_exists'));
+          if (sd.plan !== 'paid' && (sd.customerCount || 0) >= (SS.CFG.freeLimit || 50)) throw new Error(t('err_limit_biz'));
+          welcome = Number(sd.welcomeBonus) || 0;
+          tx.set(mref, { mobile: mob, name: name, uid: '', appUser: false, code: sd.shortCode + '-' + SS.pad(sd.nextCode || 1), points: welcome, lifetimePoints: welcome, totalSpend: 0, level: 'silver', blocked: false, joinedAt: SS.now(), referredBy: '', referralPaid: false, dobMonth: dob, billCount: 0, addedBy: B.user.uid });
+          tx.update(sref, { nextCode: (sd.nextCode || 1) + 1, customerCount: (sd.customerCount || 0) + 1 });
+          if (welcome > 0) tx.set(sref.collection('ledger').doc(), { memberId: mob, type: 'welcome', points: welcome, note: '', at: SS.now() });
+        });
+      }, t('cust_added'));
+      s.close(); open({ name: 'cust', id: mob });
+    } catch (e) {}
+  };
+}
+function addBill(memberId) {
+  const today = SS.isoDate();
+  const m = B.memMap[memberId];
+  const s = SS.sheet(t('add_bill') + ' — ' + (m.name || m.code),
+    '<input type="file" accept="image/*" capture="environment" id="fp" class="hidden"><div class="photo-pick" id="pp" style="min-height:110px">' + ic('camera', 32) + '<span class="small">' + t('photo_optional') + '</span></div>' +
+    '<label class="f">' + t('bill_amount') + '<input class="inp" id="am" type="number" inputmode="decimal" step="0.01" min="0"></label><div class="okbox" id="pv">' + t('will_get', { p: '0.00' }) + '</div>' +
+    '<label class="f">' + t('bill_date') + '<input class="inp" id="bd" type="date" value="' + today + '" max="' + today + '"></label>' +
+    '<label class="f">' + t('bill_no') + ' <small>' + t('optional') + '</small><input class="inp" id="bn"></label>' +
+    '<button class="btn gold big" id="go">' + ic('check') + t('save_credit') + '</button>');
+  let photo = null, thumb = null;
+  s.el.querySelector('#pp').onclick = () => s.el.querySelector('#fp').click();
+  s.el.querySelector('#fp').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    SS.busy(true);
+    try { photo = await SS.compress(f, 1100, 100); thumb = await SS.compress(photo, 160, 8); s.el.querySelector('#pp').innerHTML = '<img alt="Bill" src="' + photo + '">'; } finally { SS.busy(false); }
+  };
+  s.el.querySelector('#am').oninput = (e) => {
+    const c = SS.calcPoints(B.shop, SS.num(e.target.value), m);
+    s.el.querySelector('#pv').innerHTML = c.belowMin ? t('below_min', { m: SS.fmtRs(B.shop.minBill) }) : t('will_get', { p: SS.fmtPts(c.points) });
+  };
+  s.el.querySelector('#go').onclick = async () => {
+    const amt = SS.num(s.el.querySelector('#am').value);
+    if (!(amt > 0)) return SS.toast(t('err_amount'), 'err');
+    const billNo = s.el.querySelector('#bn').value.trim().toUpperCase();
+    const photoHash = photo ? await SS.hash(photo) : '';
+    try {
+      await SS.run(() => creditBill({ memberId, finalAmount: amt, billNo, billDate: SS.fromIso(s.el.querySelector('#bd').value) || SS.now(), photo, thumb, photoHash }), t('approved_ok'));
+      s.close(); loadCust(memberId); loadMonthStats();
+    } catch (e) {}
+  };
+}
+function scanCustomer() {
+  SS.scan((txt) => {
+    txt = String(txt).trim();
+    let id = '';
+    const p = txt.split(':');
+    if (p[0] === 'SS' && p.length === 3) { if (p[1] !== B.shopId) return SS.toast(t('err_other_shop'), 'err'); id = p[2]; }
+    else if (SS.validMobile(txt)) id = txt;
+    else { const m = B.members.find((x) => (x.code || '').toUpperCase() === txt.toUpperCase()); if (m) id = m.id; }
+    if (id && B.memMap[id]) open({ name: 'cust', id }); else SS.toast(t('err_cust_nf'), 'err');
+  });
+}
+
+/* ---------------- Gifts ---------------- */
+function vGifts() {
+  let h = tabHdr(t('nav_gifts')) + '<main class="page"><div class="sec-title"><span>' + t('gift_requests') + ' (' + B.reds.length + ')</span></div><div class="list">';
+  h += B.reds.length ? B.reds.map((r) => {
+    const m = B.memMap[r.memberId] || {};
+    const low = (m.points || 0) < r.points;
+    return '<div class="card col"><div class="between"><b style="font-size:17px">' + esc(r.giftName) + '</b><span class="pill gold">' + SS.fmtPts(r.points) + ' pts</span></div>' +
+      '<div class="small muted">' + esc(r.memberName || m.name || '') + ' · ' + esc(r.memberCode || '') + ' · ' + t('has_points', { p: SS.fmtPts(m.points || 0) }) + ' · ' + SS.fmtDate(r.at) + '</div>' +
+      (low ? '<div class="err">' + t('w_low_points') + '</div>' : '') +
+      '<div class="btnrow"><button class="btn danger sm" data-rcancel="' + r.id + '">' + ic('x', 18) + t('cancel') + '</button><button class="btn ok sm" data-rgive="' + r.id + '"' + (low ? ' disabled' : '') + '>' + ic('check', 18) + t('gift_given') + '</button></div></div>';
+  }).join('') : '<div class="empty">' + t('no_gift_reqs') + '</div>';
+  h += '</div><div class="sec-title"><span>' + t('gift_list') + ' (' + B.gifts.length + ')</span>' + (isOwner() ? '<button class="btn dark sm" id="addg">' + ic('plus', 18) + t('add_gift') + '</button>' : '') + '</div>';
+  h += B.gifts.length ? '<div class="gifts">' + B.gifts.map((g) => '<button class="gift" data-gift="' + g.id + '" style="text-align:left;padding:0;font:inherit;cursor:' + (isOwner() ? 'pointer' : 'default') + '"><div class="gimg">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 44)) + '</div><div class="gb"><b>' + esc(g.name) + '</b><span class="gp">' + SS.fmtPts(g.points) + ' pts</span><span class="small muted">' + (g.active === false ? t('hidden_gift') : g.stock === 0 ? t('out_of_stock') : g.stock > 0 ? t('stock_n', { n: g.stock }) : t('stock_unlimited')) + '</span></div></button>').join('') + '</div>'
+    : '<div class="empty">' + t('no_gifts_yet') + '</div>';
+  return h + '</main>';
+}
+function editGift(g) {
+  g = g || { name: '', points: '', photo: '', stock: -1, active: true };
+  const s = SS.sheet(g.id ? t('edit_gift') : t('add_gift'),
+    '<input type="file" accept="image/*" id="gf" class="hidden"><div class="photo-pick" id="gpk" style="min-height:140px">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('image', 36) + '<span>' + t('gift_photo') + '</span>') + '</div>' +
+    '<label class="f">' + t('gift_name') + '<input class="inp" id="gn" value="' + esc(g.name) + '"></label>' +
+    '<label class="f">' + t('points_needed') + '<input class="inp" id="gp" type="number" inputmode="decimal" min="0" step="any" value="' + esc(g.points) + '"></label>' +
+    '<label class="f">' + t('stock') + ' <small>' + t('stock_hint') + '</small><input class="inp" id="gs" type="number" inputmode="numeric" min="0" value="' + (g.stock >= 0 ? g.stock : '') + '"></label>' +
+    '<label class="chk"><input type="checkbox" id="ga"' + (g.active !== false ? ' checked' : '') + '>' + t('show_to_customers') + '</label>' +
+    '<button class="btn dark big" id="sv">' + t('save') + '</button>' + (g.id ? '<button class="btn danger full" id="dl">' + ic('trash') + t('delete') + '</button>' : ''));
+  let photo = g.photo;
+  s.el.querySelector('#gpk').onclick = () => s.el.querySelector('#gf').click();
+  s.el.querySelector('#gf').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; photo = await SS.compress(f, 400, 40); s.el.querySelector('#gpk').innerHTML = '<img alt="" src="' + photo + '">'; };
+  s.el.querySelector('#sv').onclick = async () => {
+    const name = s.el.querySelector('#gn').value.trim(), pts = SS.num(s.el.querySelector('#gp').value);
+    const st = s.el.querySelector('#gs').value.trim();
+    if (!name || !(pts > 0)) return SS.toast(t('err_gift'), 'err');
+    const data = { name, points: pts, photo: photo || '', stock: st === '' ? -1 : Math.max(0, Math.round(SS.num(st))), active: s.el.querySelector('#ga').checked };
+    const col = shopRef().collection('gifts');
+    try { await SS.run(() => (g.id ? col.doc(g.id).update(data) : col.add(Object.assign({ at: SS.now() }, data))), t('saved')); s.close(); } catch (e) {}
+  };
+  const dl = s.el.querySelector('#dl');
+  if (dl) dl.onclick = async () => { if (await SS.confirm(t('confirm_del_gift'), t('delete'), true)) { await SS.run(() => shopRef().collection('gifts').doc(g.id).delete(), t('deleted')); s.close(); } };
+}
+async function giveGift(id) {
+  const r = B.reds.find((x) => x.id === id); if (!r) return;
+  if (!(await SS.confirm(t('confirm_give', { g: r.giftName, n: r.memberName || r.memberCode, p: SS.fmtPts(r.points) }), t('gift_given')))) return;
+  const sref = shopRef();
+  const rref = sref.collection('redemptions').doc(id), mref = sref.collection('members').doc(r.memberId), gref = sref.collection('gifts').doc(r.giftId);
+  try {
+    await SS.run(() => SS.db.runTransaction(async (tx) => {
+      const rd = await tx.get(rref), md = await tx.get(mref), gd = await tx.get(gref);
+      if (!rd.exists || rd.data().status !== 'requested') throw new Error(t('err_already'));
+      if (!md.exists) throw new Error(t('err_cust_nf'));
+      if ((md.data().points || 0) + 1e-9 < r.points) throw new Error(t('w_low_points'));
+      if (gd.exists && gd.data().stock === 0) throw new Error(t('out_of_stock'));
+      const now = SS.now();
+      tx.update(rref, { status: 'given', givenAt: now, givenBy: whoAmI() });
+      tx.update(mref, { points: SS.FV.increment(-r.points) });
+      if (gd.exists && gd.data().stock > 0) tx.update(gref, { stock: gd.data().stock - 1 });
+      tx.set(sref.collection('ledger').doc(), { memberId: r.memberId, type: 'gift', points: -r.points, note: r.giftName, at: now });
+      tx.set(mref.collection('notifs').doc(), { kind: 'gift', gift: r.giftName, points: r.points, at: now, read: false });
+    }), t('gift_given_ok'));
+  } catch (e) {}
+}
+function cancelGift(id) {
+  const r = B.reds.find((x) => x.id === id); if (!r) return;
+  const s = SS.sheet(t('cancel_request'), '<label class="f">' + t('reason') + ' <small>' + t('optional') + '</small><input class="inp" id="cr"></label><button class="btn danger big" id="go">' + t('cancel_request') + '</button>');
+  s.el.querySelector('#go').onclick = async () => {
+    const reason = s.el.querySelector('#cr').value.trim();
+    const sref = shopRef();
+    try {
+      await SS.run(async () => {
+        const b = SS.db.batch();
+        b.update(sref.collection('redemptions').doc(id), { status: 'rejected', reason, closedAt: SS.now() });
+        b.set(sref.collection('members').doc(r.memberId).collection('notifs').doc(), { kind: 'gift_cancel', gift: r.giftName, reason, at: SS.now(), read: false });
+        await b.commit();
+      }, t('done'));
+      s.close();
+    } catch (e) {}
+  };
+}
+
+/* ---------------- More ---------------- */
+function vMore() {
+  const it = (id, icn, lbl, sub2) => '<button class="item" id="' + id + '"><span class="ic">' + ic(icn, 20) + '</span><span class="t"><b>' + lbl + '</b>' + (sub2 ? '<span>' + sub2 + '</span>' : '') + '</span>' + ic('chev') + '</button>';
+  const sh = B.shop;
+  return tabHdr(t('nav_more')) + '<main class="page"><div class="list menu">' +
+    it('m_qr', 'qr', t('shop_qr'), t('shop_qr_sub')) +
+    it('m_rep', 'chart', t('reports'), t('reports_sub')) +
+    it('m_plan', 'star', t('plan'), sh.plan === 'paid' ? t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) }) : t('plan_free_n', { n: sh.customerCount || 0, l: SS.CFG.freeLimit || 50 })) +
+    (isOwner() ? it('m_set', 'settings', t('settings'), t('settings_sub')) + it('m_staff', 'users', t('staff'), t('staff_sub')) + it('m_xl', 'download', t('excel_backup'), t('excel_sub')) : '') +
+    '</div><label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
+    '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
+    '<div class="ver">ShopSathi Business v' + SS.VERSION + ' · ' + esc(B.mobile) + ' · ' + t(isOwner() ? 'owner' : 'staff') + '</div></main>';
+}
+function vQR() {
+  const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(B.shopId);
+  return sub(t('shop_qr')) + '<main class="page"><div id="printable" class="qrbox"><b style="font-size:22px">' + esc(B.shop.name) + '</b><div class="small muted">' + t('qr_poster_line') + '</div><div class="qrimg" id="sqr"></div><div class="small muted">' + t('shop_code') + '</div><div class="code">' + esc(B.shopId) + '</div><div class="small muted center">' + esc(SS.ruleText(B.shop)) + '</div><div style="display:flex;align-items:center;gap:6px">' + SS.logo(24) + '<b><span style="color:#6E4F0E">Shop</span>Sathi</b></div></div>' +
+    '<div class="btnrow noprint"><button class="btn gold" id="shr">' + ic('share') + t('share') + '</button><button class="btn light" id="prt">' + ic('download') + t('print') + '</button></div>' +
+    '<button class="btn light full noprint" id="cp">' + t('copy_link') + '</button><div class="small muted center noprint">' + esc(link) + '</div></main>';
+}
+
+/* ---------------- Reports ---------------- */
+function vReports() {
+  const v = B.view;
+  const r = v.data;
+  let body = '<div class="empty">' + t('loading') + '</div>';
+  if (r) {
+    body = '<div class="stats">' +
+      '<div class="stat"><b>' + r.approved + '</b><span>' + t('r_bills_ok') + '</span></div>' +
+      '<div class="stat"><b>' + r.rejected + '</b><span>' + t('r_bills_rej') + '</span></div>' +
+      '<div class="stat"><b style="font-size:20px">' + SS.fmtRs(Math.round(r.sales)) + '</b><span>' + t('r_sales') + '</span></div>' +
+      '<div class="stat"><b style="font-size:20px">' + SS.fmtPts(r.pointsGiven) + '</b><span>' + t('r_points') + '</span></div>' +
+      '<div class="stat"><b>' + r.giftsGiven + '</b><span>' + t('r_gifts') + '</span></div>' +
+      '<div class="stat"><b>' + r.newCust + '</b><span>' + t('r_new_cust') + '</span></div>' +
+      '<div class="stat"><b>' + B.pending.length + '</b><span>' + t('pending_bills') + '</span></div>' +
+      '<div class="stat"><b>' + B.reds.length + '</b><span>' + t('r_pending_gifts') + '</span></div></div>' +
+      '<div class="sec-title"><span>' + t('r_top') + '</span></div><div class="list">' + (r.top.length ? r.top.map((x, i) => '<div class="item" style="cursor:default"><span class="ic"><b>' + (i + 1) + '</b></span><span class="t"><b>' + esc(x.name) + '</b><span>' + esc(x.code) + ' · ' + x.n + ' ' + t('bills_word') + '</span></span><b>' + SS.fmtRs(Math.round(x.sales)) + '</b></div>').join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div>';
+  }
+  const settle = B.members.filter((m) => (m.points || 0) > 0).sort((a, b) => (b.points || 0) - (a.points || 0)).map((m) => {
+    const ng = SS.nextGift(B.gifts, m.points || 0);
+    return { m, best: ng.best };
+  }).filter((x) => x.best);
+  return sub(t('reports')) + '<main class="page" style="padding-top:6px"><label class="f">' + t('month') + '<input class="inp" type="month" id="mon" value="' + v.month + '"></label>' + body +
+    '<div class="sec-title"><span>' + t('settle_list') + ' (' + settle.length + ')</span></div><div class="small muted">' + t('settle_help', { d: SS.fmtDateFull(B.shop.settlementDate) }) + '</div><div class="list">' +
+    (settle.length ? settle.slice(0, 200).map((x) => '<button class="item" data-cust="' + esc(x.m.id) + '"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(x.m.name || x.m.code) + '</b><span>' + esc(x.m.code) + ' · ' + SS.fmtPts(x.m.points) + ' pts</span></span><span class="pill ok">' + esc(x.best.name) + '</span></button>').join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div>' +
+    (isOwner() ? '<button class="btn light full" id="xl">' + ic('download') + t('excel_backup') + '</button>' : '') + '</main>';
+}
+async function loadReport(month) {
+  const p = month.split('-').map(Number);
+  const s = SS.monthStart(p[0], p[1] - 1), e = SS.monthStart(p[0], p[1]);
+  const sref = shopRef();
+  try {
+    const [ap, up, lg] = await Promise.all([
+      sref.collection('bills').where('approvedAt', '>=', s).where('approvedAt', '<', e).get(),
+      sref.collection('bills').where('uploadedAt', '>=', s).where('uploadedAt', '<', e).get(),
+      sref.collection('ledger').where('at', '>=', s).where('at', '<', e).get()
+    ]);
+    const apb = SS.docs(ap);
+    const ok = apb.filter((b) => b.status === 'approved');
+    const rej = apb.filter((b) => b.status === 'rejected');
+    const led = SS.docs(lg);
+    const per = {};
+    ok.forEach((b) => { const k = b.memberId; per[k] = per[k] || { name: b.memberName || (B.memMap[k] || {}).name || k, code: b.memberCode, sales: 0, n: 0 }; per[k].sales += b.finalAmount || 0; per[k].n++; });
+    const data = {
+      approved: ok.length, rejected: rej.length, uploaded: up.size,
+      sales: ok.reduce((a, b) => a + (b.finalAmount || 0), 0),
+      pointsGiven: led.filter((l) => l.points > 0).reduce((a, l) => a + l.points, 0),
+      giftsGiven: led.filter((l) => l.type === 'gift').length,
+      newCust: B.members.filter((m) => m.joinedAt >= s && m.joinedAt < e).length,
+      top: Object.values(per).sort((a, b) => b.sales - a.sales).slice(0, 10)
+    };
+    if (B.view && B.view.name === 'reports' && B.view.month === month) { B.view.data = data; render(); }
+  } catch (err) { SS.toast(SS.authErr(err), 'err'); }
+}
+async function exportExcel() {
+  try {
+    SS.busy(true);
+    await SS.loadScript(SS.LIBS.xlsx);
+    const sref = shopRef();
+    const [bq, lq, rq2] = await Promise.all([sref.collection('bills').get(), sref.collection('ledger').get(), sref.collection('redemptions').get()]);
+    const wb = XLSX.utils.book_new();
+    const add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name);
+    add('Customers', B.members.map((m) => ({ Code: m.code, Name: m.name, Mobile: m.id, Points: Number(SS.fmtPts(m.points)), Level: m.level, TotalPurchase: m.totalSpend || 0, Bills: m.billCount || 0, Joined: SS.isoDate(m.joinedAt), App: m.appUser ? 'Yes' : 'No', Blocked: m.blocked ? 'Yes' : 'No', ReferredBy: m.referredBy || '' })));
+    add('Bills', SS.docs(bq).sort((a, b) => a.uploadedAt - b.uploadedAt).map((b) => ({ BillDate: SS.isoDate(b.billDate), Uploaded: new Date(b.uploadedAt).toLocaleString('en-IN'), Code: b.memberCode, Name: b.memberName, Mobile: b.memberId, BillNo: b.billNo || '', CustomerAmount: b.amount, FinalAmount: b.finalAmount || '', Points: b.points || 0, Status: b.status, Reason: b.reason || '', By: b.approvedByName || '' })));
+    add('Points Ledger', SS.docs(lq).sort((a, b) => a.at - b.at).map((l) => ({ Date: new Date(l.at).toLocaleString('en-IN'), Mobile: l.memberId, Code: (B.memMap[l.memberId] || {}).code || '', Type: l.type, Points: l.points, Note: l.note || '' })));
+    add('Gift Requests', SS.docs(rq2).sort((a, b) => a.at - b.at).map((r) => ({ Date: SS.isoDate(r.at), Code: r.memberCode, Name: r.memberName, Gift: r.giftName, Points: r.points, Status: r.status, GivenOn: r.givenAt ? SS.isoDate(r.givenAt) : '' })));
+    add('Gifts', B.gifts.map((g) => ({ Gift: g.name, Points: g.points, Stock: g.stock < 0 ? 'Unlimited' : g.stock, Active: g.active !== false ? 'Yes' : 'No' })));
+    XLSX.writeFile(wb, 'ShopSathi_' + B.shopId + '_' + SS.isoDate() + '.xlsx');
+  } catch (e) { SS.toast(e && e.code ? SS.authErr(e) : t('err_lib'), 'err'); }
+  finally { SS.busy(false); }
+}
+
+/* ---------------- Settings (owner) ---------------- */
+function vSettings() {
+  const d = Object.assign({}, B.shop);
+  return sub(t('settings')) + '<main class="page" style="padding-top:6px"><form id="sf" class="col">' +
+    '<div class="card col">' + groupHTML('shop', d) + groupHTML('brand', d) + '<div class="kv"><span>' + t('short_code') + '</span><b>' + esc(d.shortCode) + '</b></div><div class="kv"><span>' + t('shop_code') + '</span><b>' + esc(B.shopId) + '</b></div></div>' +
+    '<div class="card col">' + groupHTML('points', d) + '</div>' +
+    '<div class="card col">' + groupHTML('scheme', d) + '</div>' +
+    '<div class="card col">' + groupHTML('bonus', d) + '</div>' +
+    '<div class="card col">' + groupHTML('levels', d) + '</div>' +
+    '<div id="serr"></div><button class="btn dark big" type="submit">' + ic('check') + t('save_settings') + '</button></form>' +
+    '<div class="sec-title"><span>' + t('data_backup') + '</span></div>' +
+    '<button class="btn light full" id="xl">' + ic('download') + t('excel_backup') + '</button>' +
+    '<button class="btn light full" id="arch">' + ic('image') + t('photo_archive') + '</button><div class="small muted">' + t('photo_archive_help') + '</div>' +
+    '<div class="sec-title"><span>' + t('new_scheme') + '</span></div><div class="small muted">' + t('new_scheme_help') + '</div>' +
+    '<button class="btn light full" id="nsch">' + ic('refresh') + t('new_scheme') + '</button>' +
+    '<div class="sec-title"><span style="color:#9B2C2C">' + t('danger_zone') + '</span></div>' +
+    '<button class="btn danger full" id="delshop">' + ic('trash') + t('delete_shop') + '</button></main>';
+}
+async function saveSettings() {
+  const d = Object.assign({}, B.shop);
+  for (const g of ['shop', 'brand', 'points', 'scheme', 'bonus', 'levels']) {
+    const er = readGroup(g, app, d);
+    if (er) { SS.$('#serr').innerHTML = '<div class="err">' + esc(er) + '</div>'; return; }
+  }
+  const keys = ['name', 'ownerName', 'type', 'city', 'address', 'logo', 'pointsMode', 'percent', 'rupeesPerPoint', 'minBill', 'uploadDays', 'schemeStart', 'schemeEnd', 'settlementDate', 'welcomeBonus', 'referBonus', 'birthdayDouble', 'festival2x', 'goldSpend', 'goldMult', 'platSpend', 'platMult'];
+  const upd = {}; keys.forEach((k) => (upd[k] = d[k]));
+  try { await SS.run(() => shopRef().update(upd), t('saved')); B.drawing = null; B.view = null; B.tab = 'more'; draw(); } catch (e) {}
+}
+function newScheme() {
+  const sc = SS.defaultScheme();
+  const nextStart = Math.max(sc.start, SS.dayStart(B.shop.schemeEnd + 86400000));
+  const yr = new Date(nextStart).getFullYear() + (new Date(nextStart).getMonth() > 2 ? 1 : 0);
+  const s = SS.sheet(t('new_scheme'),
+    '<label class="f">' + t('scheme_start') + '<input class="inp" type="date" id="ns" value="' + SS.isoDate(nextStart) + '"></label>' +
+    '<label class="f">' + t('scheme_end') + '<input class="inp" type="date" id="ne" value="' + SS.isoDate(new Date(yr, 2, 31).getTime()) + '"></label>' +
+    '<label class="f">' + t('settle_date') + '<input class="inp" type="date" id="nt" value="' + SS.isoDate(new Date(yr, 3, 30).getTime()) + '"></label>' +
+    '<label class="chk"><input type="checkbox" id="rs" checked>' + t('reset_points') + '</label><div class="warn">' + t('reset_warn') + '</div>' +
+    '<button class="btn dark big" id="go">' + t('start_scheme') + '</button>');
+  s.el.querySelector('#go').onclick = async () => {
+    const st = SS.fromIso(s.el.querySelector('#ns').value), en = SS.fromIso(s.el.querySelector('#ne').value), se = SS.fromIso(s.el.querySelector('#nt').value);
+    if (!st || !en || en < st) return SS.toast(t('err_scheme_dates'), 'err');
+    if (!se || se < en) return SS.toast(t('err_settle_date'), 'err');
+    const reset = s.el.querySelector('#rs').checked;
+    if (!(await SS.confirm(reset ? t('confirm_reset') : t('confirm_new_scheme'), t('start_scheme'), reset))) return;
+    try {
+      await SS.run(async () => {
+        const sref = shopRef(), now = SS.now();
+        if (reset) {
+          const mem = (await sref.collection('members').get()).docs;
+          for (let i = 0; i < mem.length; i += 200) {
+            const b = SS.db.batch();
+            mem.slice(i, i + 200).forEach((d) => {
+              const p = Number(d.data().points) || 0;
+              b.update(d.ref, { points: 0, totalSpend: 0, level: 'silver', billCount: 0 });
+              if (p) b.set(sref.collection('ledger').doc(), { memberId: d.id, type: 'reset', points: -p, note: t('scheme') + ' ' + (B.shop.schemeNo || 1), at: now });
+            });
+            await b.commit();
+          }
+        }
+        await sref.update({ schemeStart: st, schemeEnd: en, settlementDate: se, schemeNo: (B.shop.schemeNo || 1) + 1 });
+      }, t('scheme_started'));
+      s.close(); B.drawing = null; B.view = null; B.tab = 'home'; draw();
+    } catch (e) {}
+  };
+}
+async function photoArchive() {
+  try {
+    SS.busy(true);
+    await SS.loadScript(SS.LIBS.jszip);
+    const sref = shopRef();
+    const [pq, bq] = await Promise.all([sref.collection('photos').get(), sref.collection('bills').get()]);
+    const bills = {}; bq.docs.forEach((d) => (bills[d.id] = d.data()));
+    const done = pq.docs.filter((d) => bills[d.id] && bills[d.id].status !== 'pending');
+    if (!done.length) { SS.busy(false); return SS.toast(t('no_photos')); }
+    const zip = new JSZip();
+    done.forEach((d) => {
+      const b = bills[d.id], data = d.data().data || '';
+      const name = SS.isoDate(b.billDate) + '_' + (b.memberCode || b.memberId) + '_' + (b.status === 'approved' ? 'OK' : 'REJ') + '_' + d.id + '.jpg';
+      if (data.indexOf('base64,') > 0) zip.file(name, data.split('base64,')[1], { base64: true });
+    });
+    const blob = await zip.generateAsync({ type: 'blob' });
+    SS.download('ShopSathi_Photos_' + B.shopId + '_' + SS.isoDate() + '.zip', blob);
+    SS.busy(false);
+    if (!(await SS.confirm(t('confirm_clear_photos', { n: done.length }), t('clear_cloud'), true))) return;
+    await SS.run(async () => {
+      for (let i = 0; i < done.length; i += 200) {
+        const b = SS.db.batch();
+        done.slice(i, i + 200).forEach((d) => { b.delete(d.ref); b.update(sref.collection('bills').doc(d.id), { hasPhoto: false, photoArchived: true }); });
+        await b.commit();
+      }
+    }, t('photos_cleared'));
+  } catch (e) { SS.toast(e && e.code ? SS.authErr(e) : t('err_lib'), 'err'); }
+  finally { SS.busy(false); }
+}
+async function deleteShop() {
+  if (!(await SS.confirm(t('confirm_delete_shop'), t('delete_shop'), true))) return;
+  const pin = await SS.askPin(t('enter_pin_delete'));
+  if (!pin) return;
+  try {
+    SS.busy(true);
+    await SS.reauth(pin);
+    cleanup();
+    const sref = shopRef();
+    const mem = (await sref.collection('members').get()).docs;
+    for (const d of mem) await SS.deleteQuery(d.ref.collection('notifs'));
+    for (const c of ['members', 'bills', 'photos', 'ledger', 'redemptions', 'gifts']) await SS.deleteQuery(sref.collection(c));
+    await sref.delete();
+    await SS.db.collection('users').doc(B.user.uid).set({ ownShop: null }, { merge: true });
+    SS.toast(t('shop_deleted'), 'ok');
+    B.shopId = null; B.shop = null;
+    await SS.logout();
+  } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+  finally { SS.busy(false); }
+}
+
+/* ---------------- Staff (owner) ---------------- */
+function vStaff() {
+  const st = B.shop.staff || {};
+  const ids = (B.shop.staffUids || []).filter((u) => st[u]);
+  return sub(t('staff')) + '<main class="page" style="padding-top:6px"><div class="small muted">' + t('staff_help') + '</div><div class="list">' +
+    (ids.length ? ids.map((u) => '<div class="item" style="cursor:default"><span class="ic">' + ic('user', 20) + '</span><span class="t"><b>' + esc(st[u].name) + '</b><span>' + esc(st[u].mobile) + '</span></span><button class="btn danger sm" data-rmstaff="' + u + '">' + t('remove') + '</button></div>').join('') : '<div class="empty">' + t('no_staff') + '</div>') +
+    '</div><button class="btn dark big" id="addst">' + ic('plus') + t('add_staff') + '</button></main>';
+}
+function addStaff() {
+  const s = SS.sheet(t('add_staff'), '<label class="f">' + t('staff_name') + '<input class="inp" id="sn"></label><label class="f">' + t('mobile') + '<input class="inp" id="sm" type="tel" inputmode="numeric" maxlength="10"></label><label class="f">' + t('staff_pin') + ' <small>' + t('staff_pin_hint') + '</small><input class="inp" id="sp" type="password" inputmode="numeric" maxlength="6"></label><button class="btn dark big" id="go">' + t('add_staff') + '</button>');
+  s.el.querySelector('#go').onclick = async () => {
+    const name = s.el.querySelector('#sn').value.trim(), mob = s.el.querySelector('#sm').value.trim(), pin = s.el.querySelector('#sp').value.trim();
+    if (name.length < 2) return SS.toast(t('err_name'), 'err');
+    if (!SS.validMobile(mob)) return SS.toast(t('err_mobile'), 'err');
+    if (!SS.validPin(pin)) return SS.toast(t('err_pin'), 'err');
+    if (mob === B.mobile) return SS.toast(t('err_self_staff'), 'err');
+    const app2 = firebase.initializeApp(SS.CFG.firebase, 'staff' + Date.now());
+    try {
+      await SS.run(async () => {
+        let cred;
+        try { cred = await app2.auth().createUserWithEmailAndPassword(SS.emailFor(mob), pin); }
+        catch (e) { if (e.code === 'auth/email-already-in-use') cred = await app2.auth().signInWithEmailAndPassword(SS.emailFor(mob), pin); else throw e; }
+        const uid = cred.user.uid;
+        const upd = { staffUids: SS.FV.arrayUnion(uid) };
+        upd['staff.' + uid] = { name, mobile: mob, at: SS.now() };
+        await shopRef().update(upd);
+        await app2.firestore().collection('users').doc(uid).set({ staffShop: B.shopId, name, mobile: mob }, { merge: true });
+        await app2.auth().signOut();
+      }, t('staff_added'));
+      s.close();
+    } catch (e) {}
+    finally { app2.delete().catch(() => {}); }
+  };
+}
+async function removeStaff(uid) {
+  if (!(await SS.confirm(t('confirm_rm_staff'), t('remove'), true))) return;
+  const upd = { staffUids: SS.FV.arrayRemove(uid) };
+  upd['staff.' + uid] = SS.FV.delete();
+  SS.run(() => shopRef().update(upd), t('done'));
+}
+function openPlan() {
+  const sh = B.shop, price = SS.CFG.planPrice || 199;
+  const upi = SS.CFG.upiId ? 'upi://pay?pa=' + encodeURIComponent(SS.CFG.upiId) + '&pn=ShopSathi&am=' + price + '&cu=INR&tn=' + encodeURIComponent('ShopSathi ' + B.shopId) : '';
+  const msg = t('upgrade_msg', { id: B.shopId, s: sh.name, p: price });
+  SS.sheet(t('plan'),
+    '<div class="card"><div class="kv"><span>' + t('plan') + '</span><b>' + (sh.plan === 'paid' ? t('plan_paid') : t('plan_free')) + '</b></div>' +
+    '<div class="kv"><span>' + t('customers') + '</span><b>' + (sh.customerCount || 0) + (sh.plan === 'paid' ? '' : ' / ' + (SS.CFG.freeLimit || 50)) + '</b></div>' +
+    (sh.plan === 'paid' ? '<div class="kv"><span>' + t('valid_till') + '</span><b>' + SS.fmtDateFull(sh.paidUntil) + '</b></div>' : '') + '</div>' +
+    '<div class="okbox">' + t('plan_paid_info', { p: price }) + '</div>' +
+    (upi ? '<a class="btn gold big" href="' + esc(upi) + '">' + t('pay_upi', { p: price }) + '</a>' : '') +
+    '<a class="btn dark big" target="_blank" rel="noopener" href="https://wa.me/' + esc(SS.CFG.adminWhatsApp || '') + '?text=' + encodeURIComponent(msg) + '">' + ic('wa') + t('contact_admin') + '</a>' +
+    '<div class="small muted">' + t('plan_after_pay') + '</div>');
+}
+
+/* ---------------- Bindings ---------------- */
+function bindAll() {
+  SS.$$('[data-tab]').forEach((b) => (b.onclick = () => go(b.dataset.tab)));
+  SS.$$('[data-view]').forEach((b) => (b.onclick = () => openView(b.dataset.view)));
+  SS.$$('[data-bill]').forEach((b) => (b.onclick = () => openBill(b.dataset.bill)));
+  SS.$$('[data-cust]').forEach((b) => (b.onclick = () => open({ name: 'cust', id: b.dataset.cust })));
+  const on = (id, fn) => { const el = SS.$('#' + id); if (el) el.onclick = fn; };
+  on('back', () => { B.view = null; B.keepScroll = false; draw(); });
+  on('scanc', scanCustomer);
+  on('addc', addCustomer);
+  on('upg', openPlan);
+  // bills
+  SS.$$('[data-bm]').forEach((b) => (b.onclick = () => { B.billMode = b.dataset.bm; if (B.billMode === 'recent') { B.recent = null; loadRecent(); } draw(); }));
+  // customers
+  const cq = SS.$('#cq');
+  if (cq) cq.oninput = (e) => {
+    B.custQuery = e.target.value.trim();
+    const q = B.custQuery.toLowerCase();
+    const list = B.members.filter((m) => !q || (m.name || '').toLowerCase().indexOf(q) >= 0 || m.id.indexOf(q) >= 0 || (m.code || '').toLowerCase().indexOf(q) >= 0);
+    SS.$('#clist').innerHTML = custRows(list);
+    SS.$$('#clist [data-cust]').forEach((b) => (b.onclick = () => open({ name: 'cust', id: b.dataset.cust })));
+  };
+  SS.$$('[data-cs]').forEach((b) => (b.onclick = () => { B.custSort = b.dataset.cs; draw(); }));
+  if (B.view && B.view.name === 'cust') {
+    if (!B.custData || B.custData.id !== B.view.id) { if (B.loadingCust !== B.view.id) { B.loadingCust = B.view.id; loadCust(B.view.id).then(() => (B.loadingCust = null)); } }
+    SS.$$('[data-ct]').forEach((b) => (b.onclick = () => { B.view.tab = b.dataset.ct; draw(); }));
+    on('addbill', () => addBill(B.view.id));
+    on('blk', async () => {
+      const m = B.memMap[B.view.id];
+      if (!(await SS.confirm(m.blocked ? t('confirm_unblock') : t('confirm_block'), m.blocked ? t('unblock') : t('block'), !m.blocked))) return;
+      SS.run(() => shopRef().collection('members').doc(m.id).update({ blocked: !m.blocked }), t('done'));
+    });
+  }
+  // gifts
+  on('addg', () => editGift(null));
+  SS.$$('[data-gift]').forEach((b) => (b.onclick = () => { if (isOwner()) editGift(B.gifts.find((g) => g.id === b.dataset.gift)); }));
+  SS.$$('[data-rgive]').forEach((b) => (b.onclick = () => giveGift(b.dataset.rgive)));
+  SS.$$('[data-rcancel]').forEach((b) => (b.onclick = () => cancelGift(b.dataset.rcancel)));
+  // more
+  on('m_qr', () => open({ name: 'qr' }));
+  on('m_rep', () => openView('reports'));
+  on('m_plan', openPlan);
+  on('m_set', () => open({ name: 'settings' }));
+  on('m_staff', () => open({ name: 'staff' }));
+  on('m_xl', exportExcel);
+  on('xl', exportExcel);
+  const lang = SS.$('#lang');
+  if (lang) lang.onchange = (e) => { SS.setLang(e.target.value); SS.db.collection('users').doc(B.user.uid).set({ lang: e.target.value }, { merge: true }).catch(() => {}); draw(); };
+  on('lo', async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); });
+  // qr
+  if (B.view && B.view.name === 'qr') {
+    const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(B.shopId);
+    SS.qr(SS.$('#sqr'), link);
+    on('shr', () => SS.share(t('shop_share_msg', { s: B.shop.name, c: B.shopId }), link));
+    on('prt', () => window.print());
+    on('cp', () => SS.copy(link));
+  }
+  // reports
+  if (B.view && B.view.name === 'reports') {
+    SS.$('#mon').onchange = (e) => { B.view.month = e.target.value; B.view.data = null; draw(); loadReport(B.view.month); };
+  }
+  // settings
+  if (B.view && B.view.name === 'settings') {
+    bindGroup(app);
+    B.drawing = () => B.view && B.view.name === 'settings';
+    SS.$('#sf').onsubmit = (e) => { e.preventDefault(); saveSettings(); };
+    on('arch', photoArchive);
+    on('nsch', newScheme);
+    on('delshop', deleteShop);
+    const bk = SS.$('#back'); if (bk) bk.onclick = () => { B.drawing = null; B.view = null; B.keepScroll = false; draw(); };
+  }
+  // staff
+  if (B.view && B.view.name === 'staff') {
+    on('addst', addStaff);
+    SS.$$('[data-rmstaff]').forEach((b) => (b.onclick = () => removeStaff(b.dataset.rmstaff)));
+  }
+}
+function openView(name) {
+  if (name === 'reports') {
+    const d = new Date();
+    const month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    open({ name: 'reports', month, data: null });
+    loadReport(month);
+  } else open({ name });
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

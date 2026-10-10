@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<!-- ShopSathi v1.0.0 — landing: Customer app / Business app chunein -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ShopSathi — har bill par reward</title>
+<meta name="theme-color" content="#C2C7CC">
+<meta name="description" content="ShopSathi: dukaan ka reward points app. Customer bill upload kare, dukaandar approve kare, points se gift.">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="shared/theme.css">
+<script src="shared/config.js"></script>
+<script src="shared/i18n.js"></script>
+<script src="shared/common.js"></script>
+<script>
+  // purane QR link (?join=) ko seedha customer app par bhejo
+  (function () { var q = location.search; if (/[?&]join=/.test(q)) location.replace('customer/' + q); })();
+</script>
+</head>
+<body>
+<div id="app">
+  <div class="authwrap">
+    <div class="authhdr" id="hdr"></div>
+    <main class="page" style="padding-bottom:30px">
+      <a class="btn dark big" href="customer/" id="c"></a>
+      <a class="btn gold big" href="business/" id="b"></a>
+      <div class="card col" id="how"></div>
+      <div class="row"><span class="muted" id="lic"></span><span class="grow" id="ls"></span></div>
+      <div class="ver">ShopSathi v1.0.0</div>
+    </main>
+  </div>
+</div>
+<script>
+(function () {
+  var L = {
+    hing: ['Main Customer hoon', 'Main Dukaandar hoon', 'Kaise kaam karta hai', ['Customer bill ki photo upload karta hai', 'Dukaandar check karke approve karta hai', 'Points judte hain — points se gift milta hai']],
+    hi: ['मैं ग्राहक हूँ', 'मैं दुकानदार हूँ', 'कैसे काम करता है', ['ग्राहक बिल की फोटो अपलोड करता है', 'दुकानदार जांच कर मंज़ूर करता है', 'पॉइंट्स जुड़ते हैं — पॉइंट्स से गिफ्ट मिलता है']],
+    mr: ['मी ग्राहक आहे', 'मी दुकानदार आहे', 'हे कसे चालते', ['ग्राहक बिलाचा फोटो अपलोड करतो', 'दुकानदार तपासून मंजूर करतो', 'पॉइंट्स जमा होतात — पॉइंट्सवर गिफ्ट मिळते']],
+    en: ['I am a Customer', 'I am a Shop Owner', 'How it works', ['Customer uploads a photo of the bill', 'Shop owner checks and approves it', 'Points add up — redeem them for gifts']]
+  };
+  function draw() {
+    var x = L[SS.lang()] || L.hing;
+    document.getElementById('hdr').innerHTML = SS.logo(96) + SS.wordmark(36) + '<div style="font-weight:600;color:#33373C">' + SS.t('tagline') + '</div>';
+    document.getElementById('c').innerHTML = SS.ic('user') + x[0];
+    document.getElementById('b').innerHTML = SS.ic('shop') + x[1];
+    document.getElementById('how').innerHTML = '<b>' + x[2] + '</b>' + x[3].map(function (s, i) { return '<div class="row"><span class="pill gold">' + (i + 1) + '</span><span>' + s + '</span></div>'; }).join('');
+    document.getElementById('lic').innerHTML = SS.ic('lang');
+    document.getElementById('ls').innerHTML = SS.langSelect('lang');
+    document.getElementById('lang').onchange = function (e) { SS.setLang(e.target.value); draw(); };
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

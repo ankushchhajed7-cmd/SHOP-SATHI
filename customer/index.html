@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<!--
+  ShopSathi — Customer App
+  v1.0.0 (2026-10-10): pehla release — login (mobile + PIN), dukaan jodna (QR/code), bill upload
+  (photo + amount, offline queue), bills, gifts + gift request, points history, refer & earn,
+  notifications, 4 bhasha, account delete.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ShopSathi</title>
+<meta name="theme-color" content="#C2C7CC">
+<meta name="description" content="ShopSathi — har bill par reward points">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="../shared/theme.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+<script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
+<script src="../shared/common.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+const t = SS.t, esc = SS.esc, ic = SS.ic;
+const app = document.getElementById('app');
+const qs = new URLSearchParams(location.search);
+const S = {
+  user: null, mobile: '', profile: null, cur: null, shop: null, member: null,
+  gifts: [], bills: [], reds: [], notifs: [], shopNames: {},
+  tab: 'home', billFilter: 'all', unsub: [], seenNotifs: null, pendingSignup: null,
+  joinCode: (qs.get('join') || '').toUpperCase(), refCode: (qs.get('ref') || '').toUpperCase()
+};
+
+/* ---------------- Boot ---------------- */
+function boot() {
+  document.documentElement.lang = SS.htmlLang();
+  if (!SS.configured()) { app.innerHTML = SS.notConfiguredHTML(); return; }
+  if (!window.firebase) { app.innerHTML = SS.offlineLibHTML(); return; }
+  SS.initFirebase();
+  SS.registerSW();
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(88) + SS.wordmark(32) + '</div></div>';
+  SS.auth.onAuthStateChanged((u) => { if (u) onLogin(u); else { cleanup(); S.user = null; renderAuth(); } });
+}
+
+function cleanup() { S.unsub.forEach((f) => { try { f(); } catch (e) {} }); S.unsub = []; }
+
+/* ---------------- Auth ---------------- */
+function renderAuth(mode) {
+  mode = mode || 'login';
+  app.innerHTML =
+    '<div class="authwrap"><div class="authhdr">' + SS.logo(88) + SS.wordmark(34) +
+    '<div class="muted" style="color:#33373C;font-weight:600">' + t('tagline') + '</div></div>' +
+    '<main class="page" style="padding-bottom:30px">' +
+    '<div class="row"><span class="muted">' + ic('lang') + '</span>' + SS.langSelect('lang') + '</div>' +
+    '<div class="seg" role="tablist"><button class="' + (mode === 'login' ? 'on' : '') + '" data-m="login">' + t('login') + '</button><button class="' + (mode === 'signup' ? 'on' : '') + '" data-m="signup">' + t('new_account') + '</button></div>' +
+    '<form id="af" class="col" autocomplete="on">' +
+    (mode === 'signup' ? '<label class="f">' + t('your_name') + '<input class="inp" id="nm" autocomplete="name" required></label>' : '') +
+    '<label class="f">' + t('mobile') + '<input class="inp" id="mb" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="98XXXXXXXX" required></label>' +
+    '<label class="f">' + t('pin') + ' <small>' + t('pin_hint') + '</small><input class="inp" id="pn" type="password" inputmode="numeric" maxlength="6" autocomplete="' + (mode === 'signup' ? 'new-password' : 'current-password') + '" required></label>' +
+    (mode === 'signup' ? '<label class="f">' + t('birth_month') + ' <small>' + t('optional') + '</small><select class="inp" id="dob">' + SS.MONTH_OPTIONS(0) + '</select></label>' : '') +
+    '<div id="aerr"></div>' +
+    '<button class="btn dark big" type="submit">' + (mode === 'signup' ? t('create_account') : t('login')) + '</button>' +
+    '</form>' +
+    '<p class="small muted center" style="margin:0">' + t('forgot_pin_cust') + '</p>' +
+    '<div class="ver">ShopSathi v' + SS.VERSION + '</div></main></div>';
+  SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); renderAuth(mode); };
+  SS.$$('[data-m]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.m)));
+  SS.$('#af').onsubmit = async (e) => {
+    e.preventDefault();
+    const mb = SS.$('#mb').value.trim(), pn = SS.$('#pn').value.trim();
+    const err = (m) => (SS.$('#aerr').innerHTML = '<div class="err">' + esc(m) + '</div>');
+    if (!SS.validMobile(mb)) return err(t('err_mobile'));
+    if (!SS.validPin(pn)) return err(t('err_pin'));
+    try {
+      SS.busy(true);
+      if (mode === 'signup') {
+        const nm = SS.$('#nm').value.trim();
+        if (nm.length < 2) { SS.busy(false); return err(t('err_name')); }
+        S.pendingSignup = { name: nm, dobMonth: Number(SS.$('#dob').value) || 0 };
+        await SS.signup(mb, pn);
+      } else {
+        await SS.login(mb, pn);
+      }
+    } catch (ex) { err(SS.authErr(ex)); }
+    finally { SS.busy(false); }
+  };
+}
+
+async function onLogin(u) {
+  S.user = u; S.mobile = SS.mobileOf(u);
+  const ref = SS.db.collection('users').doc(u.uid);
+  let snap;
+  try { snap = await ref.get(); } catch (e) { snap = await ref.get({ source: 'cache' }).catch(() => null); }
+  if (!snap || !snap.exists) {
+    const p = S.pendingSignup || {};
+    S.profile = { name: p.name || '', mobile: S.mobile, dobMonth: p.dobMonth || 0, shops: [], lang: SS.lang(), createdAt: SS.now() };
+    ref.set(S.profile, { merge: true }).catch(() => {});
+  } else {
+    S.profile = snap.data();
+    if (!S.profile.shops) S.profile.shops = [];
+    if (S.profile.lang && S.profile.lang !== SS.lang()) SS.setLang(S.profile.lang);
+  }
+  S.pendingSignup = null;
+  SS.askNotify();
+  if (S.joinCode && S.profile.shops.indexOf(S.joinCode) < 0) return renderJoin(S.joinCode);
+  if (!S.profile.shops.length) return renderJoin('');
+  let cur = localStorage.getItem('ss_cur_shop');
+  if (S.profile.shops.indexOf(cur) < 0) cur = S.profile.shops[0];
+  selectShop(cur);
+}
+
+/* ---------------- Join shop ---------------- */
+function renderJoin(code) {
+  cleanup();
+  const hasShops = S.profile && S.profile.shops && S.profile.shops.length;
+  app.innerHTML =
+    '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + SS.wordmark(28) + '<div style="font-weight:700">' + t('join_title') + '</div></div>' +
+    '<main class="page" style="padding-bottom:30px">' +
+    (hasShops ? '<button class="btn light" id="bk">' + ic('back') + t('back') + '</button>' : '') +
+    '<p style="margin:0">' + t('join_help') + '</p>' +
+    '<label class="f">' + t('shop_code') + '<input class="inp" id="jc" autocapitalize="characters" value="' + esc(code || '') + '" placeholder="AK7X2" style="text-transform:uppercase;letter-spacing:2px;font-weight:700"></label>' +
+    '<div class="btnrow"><button class="btn light" id="scan">' + ic('scan') + t('scan_qr') + '</button><button class="btn dark" id="find">' + ic('search') + t('find') + '</button></div>' +
+    '<label class="f">' + t('ref_code') + ' <small>' + t('ref_code_hint') + '</small><input class="inp" id="rc" autocapitalize="characters" value="' + esc(S.refCode) + '" placeholder="AK-0001" style="text-transform:uppercase"></label>' +
+    '<div id="jres"></div>' +
+    (!hasShops ? '<button class="btn light" id="lo">' + ic('logout') + t('logout') + '</button>' : '') +
+    '</main></div>';
+  if (SS.$('#bk')) SS.$('#bk').onclick = () => selectShop(S.cur || S.profile.shops[0]);
+  if (SS.$('#lo')) SS.$('#lo').onclick = () => SS.logout();
+  SS.$('#scan').onclick = () => SS.scan((txt) => {
+    const c = parseJoin(txt);
+    if (c) { SS.$('#jc').value = c; findShop(); } else SS.toast(t('err_qr'), 'err');
+  });
+  SS.$('#find').onclick = findShop;
+  if (code) findShop();
+}
+function parseJoin(txt) {
+  txt = String(txt || '').trim();
+  try { const u = new URL(txt); const j = u.searchParams.get('join'); if (j) { const r = u.searchParams.get('ref'); if (r && SS.$('#rc')) SS.$('#rc').value = r.toUpperCase(); return j.toUpperCase(); } } catch (e) {}
+  if (/^[A-Z0-9]{4,10}$/i.test(txt)) return txt.toUpperCase();
+  return '';
+}
+async function findShop() {
+  const code = SS.$('#jc').value.trim().toUpperCase();
+  const box = SS.$('#jres');
+  if (!code) return;
+  box.innerHTML = '<div class="empty">' + t('loading') + '</div>';
+  let snap;
+  try { snap = await SS.db.collection('shops').doc(code).get(); } catch (e) { box.innerHTML = '<div class="err">' + esc(SS.authErr(e)) + '</div>'; return; }
+  if (!snap.exists) { box.innerHTML = '<div class="err">' + t('err_shop_nf') + '</div>'; return; }
+  const sh = snap.data();
+  if (!sh.active) { box.innerHTML = '<div class="err">' + t('err_shop_off') + '</div>'; return; }
+  const already = S.profile.shops.indexOf(code) >= 0;
+  box.innerHTML =
+    '<div class="card col"><div class="row">' + (sh.logo ? '<img src="' + sh.logo + '" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover">' : '<span class="item"><span class="ic">' + ic('shop') + '</span></span>') +
+    '<div class="grow"><b style="font-size:19px">' + esc(sh.name) + '</b><div class="muted small">' + esc(t('type_' + (sh.type || 'other'))) + ' · ' + esc(sh.city || '') + '</div></div></div>' +
+    '<div class="kv"><span>' + t('points_rule') + '</span><b>' + esc(SS.ruleText(sh)) + '</b></div>' +
+    (sh.welcomeBonus > 0 ? '<div class="kv"><span>' + t('welcome_bonus') + '</span><b>' + SS.fmtPts(sh.welcomeBonus) + '</b></div>' : '') +
+    '<div class="kv"><span>' + t('scheme') + '</span><b>' + SS.fmtDate(sh.schemeStart) + ' – ' + SS.fmtDateFull(sh.schemeEnd) + '</b></div>' +
+    (already ? '<div class="okbox">' + t('already_joined') + '</div><button class="btn dark big" id="open">' + t('open') + '</button>'
+      : '<button class="btn dark big" id="join">' + ic('plus') + t('join_btn') + '</button>') + '</div>';
+  if (already) SS.$('#open').onclick = () => selectShop(code);
+  else SS.$('#join').onclick = () => joinShop(code, sh);
+}
+async function joinShop(code, sh) {
+  const ref = (SS.$('#rc').value || '').trim().toUpperCase();
+  const shopRef = SS.db.collection('shops').doc(code);
+  const memRef = shopRef.collection('members').doc(S.mobile);
+  try {
+    SS.busy(true);
+    let created = false, welcome = 0;
+    await SS.db.runTransaction(async (tx) => {
+      const s = await tx.get(shopRef);
+      const m = await tx.get(memRef);
+      const d = s.data();
+      if (!d.active) throw new Error(t('err_shop_off'));
+      if (m.exists) {
+        const upd = { uid: S.user.uid, appUser: true };
+        if (!m.data().name && S.profile.name) upd.name = S.profile.name;
+        if (!m.data().dobMonth && S.profile.dobMonth) upd.dobMonth = S.profile.dobMonth;
+        tx.update(memRef, upd);
+        return;
+      }
+      if (d.plan !== 'paid' && (d.customerCount || 0) >= (SS.CFG.freeLimit || 50)) throw new Error(t('err_limit'));
+      welcome = Number(d.welcomeBonus) || 0;
+      const codeStr = d.shortCode + '-' + SS.pad(d.nextCode || 1);
+      tx.set(memRef, {
+        mobile: S.mobile, name: S.profile.name || '', uid: S.user.uid, appUser: true, code: codeStr,
+        points: welcome, lifetimePoints: welcome, totalSpend: 0, level: 'silver', blocked: false,
+        joinedAt: SS.now(), referredBy: ref && ref !== codeStr ? ref : '', referralPaid: false,
+        dobMonth: Number(S.profile.dobMonth) || 0, billCount: 0
+      });
+      tx.update(shopRef, { nextCode: (d.nextCode || 1) + 1, customerCount: (d.customerCount || 0) + 1 });
+      created = true;
+    });
+    if (created && welcome > 0) {
+      shopRef.collection('ledger').add({ memberId: S.mobile, type: 'welcome', points: welcome, note: t('welcome_bonus'), at: SS.now() }).catch(() => {});
+    }
+    await SS.db.collection('users').doc(S.user.uid).set({ shops: SS.FV.arrayUnion(code) }, { merge: true });
+    if (S.profile.shops.indexOf(code) < 0) S.profile.shops.push(code);
+    S.joinCode = '';
+    if (history.replaceState) history.replaceState(null, '', location.pathname);
+    SS.toast(created && welcome > 0 ? t('joined_bonus', { p: SS.fmtPts(welcome) }) : t('joined'), 'ok');
+    selectShop(code);
+  } catch (e) { SS.toast(e.code ? SS.authErr(e) : e.message, 'err'); }
+  finally { SS.busy(false); }
+}
+
+/* ---------------- Shop data listeners ---------------- */
+function selectShop(id) {
+  cleanup();
+  S.cur = id; localStorage.setItem('ss_cur_shop', id);
+  S.shop = null; S.member = null; S.gifts = []; S.bills = []; S.reds = []; S.notifs = []; S.seenNotifs = null;
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + '<div>' + t('loading') + '</div></div></div>';
+  const shopRef = SS.db.collection('shops').doc(id);
+  const onErr = (e) => { console.warn(e); };
+  S.unsub.push(shopRef.onSnapshot((d) => { S.shop = d.exists ? d.data() : null; S.shopNames[id] = S.shop ? S.shop.name : id; if (!d.exists && !d.metadata.fromCache) return dropShop(id); render(); }, onErr));
+  S.unsub.push(shopRef.collection('members').doc(S.mobile).onSnapshot((d) => {
+    if (!d.exists) { if (!d.metadata.fromCache) return dropShop(id); return; }
+    S.member = d.data(); render();
+  }, onErr));
+  S.unsub.push(shopRef.collection('gifts').onSnapshot((q) => { S.gifts = SS.docs(q).filter((g) => g.active !== false).sort((a, b) => a.points - b.points); render(); }, onErr));
+  S.unsub.push(shopRef.collection('bills').where('memberId', '==', S.mobile).onSnapshot({ includeMetadataChanges: true }, (q) => {
+    S.bills = q.docs.map((d) => Object.assign({ id: d.id, _local: d.metadata.hasPendingWrites }, d.data())).sort((a, b) => b.uploadedAt - a.uploadedAt);
+    render();
+  }, onErr));
+  S.unsub.push(shopRef.collection('redemptions').where('memberId', '==', S.mobile).onSnapshot((q) => { S.reds = SS.docs(q).sort((a, b) => b.at - a.at); render(); }, onErr));
+  S.unsub.push(shopRef.collection('members').doc(S.mobile).collection('notifs').orderBy('at', 'desc').limit(30).onSnapshot((q) => {
+    const list = SS.docs(q);
+    if (S.seenNotifs) list.forEach((n) => { if (!S.seenNotifs.has(n.id) && !n.read) { const x = notifText(n); SS.notify(x.title, x.body); } });
+    S.seenNotifs = new Set(list.map((n) => n.id));
+    S.notifs = list; render();
+  }, onErr));
+}
+async function dropShop(id) {
+  // dukaan ne customer hata diya ya dukaan band — list se nikaalo
+  cleanup();
+  S.profile.shops = S.profile.shops.filter((x) => x !== id);
+  SS.db.collection('users').doc(S.user.uid).set({ shops: SS.FV.arrayRemove(id) }, { merge: true }).catch(() => {});
+  SS.toast(t('shop_removed'), 'err');
+  if (S.profile.shops.length) selectShop(S.profile.shops[0]); else renderJoin('');
+}
+
+/* ---------------- Render ---------------- */
+let rq = 0;
+function render() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; draw(); }); }
+function draw() {
+  if (!S.shop || !S.member) return;
+  const keepScroll = window.scrollY;
+  const tabs = { home: drawHome, bills: drawBills, gifts: drawGifts, profile: drawProfile };
+  app.innerHTML = (tabs[S.tab] || drawHome)() + navHTML();
+  bindCommon();
+  ({ home: bindHome, bills: bindBills, gifts: bindGifts, profile: bindProfile }[S.tab] || bindHome)();
+  window.scrollTo(0, keepScroll);
+}
+function navHTML() {
+  const b = (k, icn, lbl) => '<button class="' + (S.tab === k ? 'on' : '') + '" data-tab="' + k + '" aria-label="' + lbl + '">' + ic(icn, 24) + lbl + '</button>';
+  return '<nav class="bnav">' + b('home', 'home', t('nav_home')) + b('bills', 'receipt', t('nav_bills')) + b('gifts', 'gift', t('nav_gifts')) + b('profile', 'user', t('nav_profile')) + '</nav>';
+}
+function unread() { return S.notifs.filter((n) => !n.read).length; }
+function topRow() {
+  const n = unread();
+  return '<div class="top">' + SS.logo(40) +
+    '<div class="brand"><b><span>Shop</span>Sathi</b><button class="linkish" id="swShop">' + esc(S.shop.name) + ' · ' + esc(S.member.code) + ' ' + ic('down', 14) + '</button></div>' +
+    '<button class="iconbtn" id="bell" aria-label="' + t('notifications') + '">' + ic('bell') + (n ? '<span class="dot">' + n + '</span>' : '') + '</button></div>';
+}
+function miniHeader(title) { return '<header class="mhdr" style="padding-bottom:16px">' + topRow() + '<div class="hello">' + esc(title) + '</div></header>'; }
+function openReqPoints() { return S.reds.filter((r) => r.status === 'requested').reduce((a, r) => a + (Number(r.points) || 0), 0); }
+function schemeState() {
+  const now = SS.now(), sh = S.shop;
+  if (now < SS.dayStart(sh.schemeStart)) return 'before';
+  if (now > SS.dayEnd(sh.schemeEnd)) return 'after';
+  return 'on';
+}
+function billRow(b) {
+  const st = b.status;
+  const pill = b._local ? '<span class="pill grey">' + t('st_queued') + '</span>'
+    : st === 'approved' ? '<span class="pill ok">' + t('st_approved') + '</span>'
+    : st === 'rejected' ? '<span class="pill rej">' + t('st_rejected') + '</span>'
+    : '<span class="pill pend">' + t('st_pending') + '</span>';
+  const amt = st === 'approved' ? b.finalAmount : b.amount;
+  const sub = st === 'approved' ? SS.fmtDate(b.billDate) + ' · +' + SS.fmtPts(b.points) + ' pts'
+    : st === 'rejected' ? SS.fmtDate(b.billDate) + ' · ' + esc(b.reason || '')
+    : SS.fmtDate(b.billDate) + (b.billNo ? ' · #' + esc(b.billNo) : '');
+  return '<button class="item" data-bill="' + b.id + '"><span class="ic">' + (b.thumb ? '<img alt="" src="' + b.thumb + '">' : ic('receipt', 20)) + '</span>' +
+    '<span class="t"><b>' + SS.fmtRs(amt) + '</b><span>' + sub + '</span></span>' + pill + '</button>';
+}
+
+function drawHome() {
+  const sh = S.shop, m = S.member;
+  const pts = Number(m.points) || 0;
+  const ng = SS.nextGift(S.gifts, pts);
+  const pct = ng.next ? Math.min(100, (pts / ng.next.points) * 100) : (S.gifts.length ? 100 : 0);
+  const gline = ng.next ? t('next_gift', { g: esc(ng.next.name), p: ng.next.points, n: SS.fmtPts(ng.next.points - pts) })
+    : S.gifts.length ? t('all_gifts_reach') : t('no_gifts_yet');
+  const ss = schemeState();
+  const days = SS.daysLeft(sh.schemeEnd);
+  const month = new Date().getMonth() + 1;
+  let notes = '';
+  if (!sh.active) notes += '<div class="err">' + t('err_shop_off') + '</div>';
+  if (m.blocked) notes += '<div class="err">' + t('blocked_msg') + '</div>';
+  if (ss === 'before') notes += '<div class="warn">' + t('scheme_before', { d: SS.fmtDateFull(sh.schemeStart) }) + '</div>';
+  if (ss === 'after') notes += '<div class="warn">' + t('scheme_after', { d: SS.fmtDateFull(sh.settlementDate) }) + '</div>';
+  if (sh.festival2x) notes += '<div class="okbox">' + ic('star', 18) + ' ' + t('festival_on') + '</div>';
+  if (sh.birthdayDouble && Number(m.dobMonth) === month) notes += '<div class="okbox">' + ic('gift', 18) + ' ' + t('birthday_on') + '</div>';
+  const open = S.reds.filter((r) => r.status === 'requested');
+  if (open.length) notes += '<div class="warn">' + t('gift_req_open', { g: esc(open.map((r) => r.giftName).join(', ')) }) + '</div>';
+  else if (ng.best && !m.blocked) notes += '<button class="okbox" data-tab="gifts" style="border:none;text-align:left;cursor:pointer;font:inherit;font-weight:600">' + ic('gift', 18) + ' ' + t('can_get_cust', { g: esc(ng.best.name) }) + '</button>';
+  const canUp = sh.active && !m.blocked && ss === 'on';
+  return '<header class="mhdr">' + topRow() +
+    '<div class="hello">' + t('namaste') + ', ' + esc((m.name || S.profile.name || '').split(' ')[0]) + '</div>' +
+    '<div class="bigpts"><div style="display:flex;flex-direction:column;line-height:1"><span class="lbl">' + t('reward_points') + '</span><span class="num">' + SS.fmtPts(pts) + '</span></div>' +
+    '<span class="pill-dark">' + (ss === 'after' ? t('scheme_over') : ss === 'before' ? t('starts_on', { d: SS.fmtDate(sh.schemeStart) }) : t('days_left', { n: days })) + '</span></div>' +
+    '<div class="bar" role="progressbar" aria-valuenow="' + Math.round(pct) + '" aria-valuemin="0" aria-valuemax="100"><i style="width:' + pct + '%"></i></div>' +
+    '<div style="font-size:14px">' + gline + '</div></header>' +
+    '<main class="page">' + notes +
+    '<div class="between"><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span><span class="small muted">' + esc(SS.ruleText(sh)) + '</span></div>' +
+    '<button class="btn dark big" id="up"' + (canUp ? '' : ' disabled') + '>' + ic('camera') + t('upload_bill') + '</button>' +
+    '<div class="sec-title"><span>' + t('recent_bills') + '</span><button class="lnk" id="all">' + t('see_all') + '</button></div>' +
+    '<div class="list">' + (S.bills.length ? S.bills.slice(0, 4).map(billRow).join('') : '<div class="empty">' + t('no_bills') + '</div>') + '</div>' +
+    '</main>';
+}
+function bindHome() {
+  const up = SS.$('#up'); if (up) up.onclick = openUpload;
+  SS.$('#all').onclick = () => { S.tab = 'bills'; draw(); window.scrollTo(0, 0); };
+}
+
+function drawBills() {
+  const f = S.billFilter;
+  const list = S.bills.filter((b) => f === 'all' || b.status === f);
+  const seg = (k, l) => '<button class="' + (f === k ? 'on' : '') + '" data-f="' + k + '">' + l + '</button>';
+  return miniHeader(t('my_bills')) + '<main class="page">' +
+    '<div class="seg">' + seg('all', t('all')) + seg('pending', t('st_pending')) + seg('approved', t('st_approved')) + seg('rejected', t('st_rejected')) + '</div>' +
+    '<div class="list">' + (list.length ? list.map(billRow).join('') : '<div class="empty">' + t('no_bills') + '</div>') + '</div></main>';
+}
+function bindBills() { SS.$$('[data-f]').forEach((b) => (b.onclick = () => { S.billFilter = b.dataset.f; draw(); })); }
+
+function drawGifts() {
+  const pts = Number(S.member.points) || 0;
+  const avail = pts - openReqPoints();
+  const settleOk = SS.now() <= SS.dayEnd(S.shop.settlementDate || S.shop.schemeEnd);
+  const open = S.reds.filter((r) => r.status === 'requested');
+  let h = miniHeader(t('gift_list')) + '<main class="page">' +
+    '<div class="card between"><div><div class="small muted">' + t('reward_points') + '</div><b style="font-size:28px">' + SS.fmtPts(pts) + '</b></div>' +
+    (open.length ? '<div class="small muted" style="text-align:right">' + t('available') + '<br><b style="font-size:18px;color:#1F2226">' + SS.fmtPts(avail) + '</b></div>' : '') + '</div>';
+  if (open.length) {
+    h += '<div class="sec-title"><span>' + t('my_requests') + '</span></div><div class="list">' + open.map((r) =>
+      '<div class="item" style="cursor:default"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(r.giftName) + '</b><span>' + SS.fmtPts(r.points) + ' pts · ' + SS.fmtDate(r.at) + '</span></span><button class="btn danger sm" data-cancel="' + r.id + '">' + t('cancel') + '</button></div>').join('') + '</div>';
+  }
+  if (!settleOk) h += '<div class="warn">' + t('gift_closed') + '</div>';
+  h += '<div class="sec-title"><span>' + t('all_gifts') + '</span></div>';
+  if (!S.gifts.length) h += '<div class="empty">' + t('no_gifts_yet') + '</div>';
+  else h += '<div class="gifts">' + S.gifts.map((g) => {
+    const reach = pts >= g.points;
+    const out = g.stock === 0;
+    const can = reach && avail >= g.points && settleOk && !out && !S.member.blocked;
+    const p = Math.min(100, (pts / g.points) * 100);
+    return '<div class="gift">' + (reach ? '<span class="tick" aria-label="' + t('reachable') + '">' + ic('check', 18) + '</span>' : '') +
+      '<div class="gimg">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 48)) + '</div>' +
+      '<div class="gb"><b>' + esc(g.name) + '</b><span class="gp">' + SS.fmtPts(g.points) + ' pts</span>' +
+      (out ? '<span class="pill rej" style="align-self:flex-start">' + t('out_of_stock') + '</span>'
+        : reach ? (can ? '<button class="btn gold sm" data-req="' + g.id + '">' + t('request_gift') + '</button>' : '')
+        : '<div class="bar light"><i style="width:' + p + '%"></i></div><span class="small muted">' + t('need_more', { n: SS.fmtPts(g.points - pts) }) + '</span>') +
+      '</div></div>';
+  }).join('') + '</div>';
+  const done = S.reds.filter((r) => r.status === 'given');
+  if (done.length) h += '<div class="sec-title"><span>' + t('gifts_received') + '</span></div><div class="list">' + done.map((r) => '<div class="item" style="cursor:default"><span class="ic">' + ic('check', 20) + '</span><span class="t"><b>' + esc(r.giftName) + '</b><span>' + SS.fmtDate(r.givenAt) + ' · -' + SS.fmtPts(r.points) + ' pts</span></span></div>').join('') + '</div>';
+  return h + '</main>';
+}
+function bindGifts() {
+  SS.$$('[data-req]').forEach((b) => (b.onclick = async () => {
+    const g = S.gifts.find((x) => x.id === b.dataset.req);
+    if (!g) return;
+    const ok = await SS.confirm(t('confirm_req', { g: g.name, p: SS.fmtPts(g.points) }), t('request_gift'));
+    if (!ok) return;
+    SS.run(() => SS.db.collection('shops').doc(S.cur).collection('redemptions').add({
+      memberId: S.mobile, memberName: S.member.name || '', memberCode: S.member.code, giftId: g.id, giftName: g.name,
+      points: Number(g.points), status: 'requested', at: SS.now()
+    }), t('req_sent'));
+  }));
+  SS.$$('[data-cancel]').forEach((b) => (b.onclick = async () => {
+    if (!(await SS.confirm(t('confirm_cancel_req'), t('cancel'), true))) return;
+    SS.run(() => SS.db.collection('shops').doc(S.cur).collection('redemptions').doc(b.dataset.cancel).update({ status: 'cancelled', closedAt: SS.now() }));
+  }));
+}
+
+function drawProfile() {
+  const m = S.member, sh = S.shop;
+  const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(S.cur) + '&ref=' + encodeURIComponent(m.code);
+  return miniHeader(t('nav_profile')) + '<main class="page">' +
+    '<div class="qrbox"><div class="qrimg" id="myqr"></div><div class="code">' + esc(m.code) + '</div><div class="small muted center">' + t('my_qr_hint') + '</div></div>' +
+    '<div class="card"><div class="kv"><span>' + t('your_name') + '</span><b>' + esc(m.name || S.profile.name || '-') + '</b></div>' +
+    '<div class="kv"><span>' + t('mobile') + '</span><b>' + esc(S.mobile) + '</b></div>' +
+    '<div class="kv"><span>' + t('level') + '</span><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></div>' +
+    '<div class="kv"><span>' + t('total_purchase') + '</span><b>' + SS.fmtRs(m.totalSpend || 0) + '</b></div>' +
+    '<div class="kv"><span>' + t('birth_month') + '</span><b>' + (m.dobMonth ? SS.MONTHS[m.dobMonth - 1] : '<button class="lnk" id="setdob">' + t('set') + '</button>') + '</b></div>' +
+    levelInfo(sh) + '</div>' +
+    (sh.referBonus > 0 ? '<div class="card col"><b>' + t('refer_title') + '</b><span class="small muted">' + t('refer_help', { p: SS.fmtPts(sh.referBonus) }) + '</span><button class="btn gold" id="refer" data-link="' + esc(link) + '">' + ic('share') + t('refer_share') + '</button></div>' : '') +
+    '<div class="btnrow"><button class="btn light" id="hist">' + ic('list') + t('points_history') + '</button><button class="btn light" id="shops">' + ic('shop') + t('my_shops') + '</button></div>' +
+    '<label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
+    '<button class="btn light full" id="edit">' + ic('edit') + t('edit_name') + '</button>' +
+    '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
+    '<button class="btn danger full" id="del">' + ic('trash') + t('delete_account') + '</button>' +
+    '<div class="ver">ShopSathi v' + SS.VERSION + '</div></main>';
+}
+function levelInfo(sh) {
+  if (!(sh.goldSpend > 0 || sh.platSpend > 0)) return '';
+  return '<div class="small muted" style="padding-top:8px">' + t('level_info', { g: SS.fmtRs(sh.goldSpend), gm: sh.goldMult, p: SS.fmtRs(sh.platSpend), pm: sh.platMult }) + '</div>';
+}
+function bindProfile() {
+  SS.qr(SS.$('#myqr'), 'SS:' + S.cur + ':' + S.mobile);
+  const r = SS.$('#refer');
+  if (r) r.onclick = () => SS.share(t('refer_msg', { s: S.shop.name, c: S.member.code, p: SS.fmtPts(S.shop.referBonus) }), r.dataset.link);
+  SS.$('#hist').onclick = openHistory;
+  SS.$('#shops').onclick = openShops;
+  SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); SS.db.collection('users').doc(S.user.uid).set({ lang: e.target.value }, { merge: true }).catch(() => {}); draw(); };
+  SS.$('#lo').onclick = async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); };
+  SS.$('#del').onclick = deleteAccount;
+  SS.$('#edit').onclick = editName;
+  const sd = SS.$('#setdob'); if (sd) sd.onclick = setDob;
+}
+function editName() {
+  const m = SS.sheet(t('edit_name'), '<label class="f">' + t('your_name') + '<input class="inp" id="en" value="' + esc(S.member.name || S.profile.name || '') + '"></label><button class="btn dark big" id="sv">' + t('save') + '</button>');
+  m.el.querySelector('#sv').onclick = async () => {
+    const v = m.el.querySelector('#en').value.trim();
+    if (v.length < 2) return SS.toast(t('err_name'), 'err');
+    await SS.run(async () => {
+      await SS.db.collection('users').doc(S.user.uid).set({ name: v }, { merge: true });
+      S.profile.name = v;
+      for (const id of S.profile.shops) await SS.db.collection('shops').doc(id).collection('members').doc(S.mobile).update({ name: v }).catch(() => {});
+    }, t('saved'));
+    m.close();
+  };
+}
+function setDob() {
+  const m = SS.sheet(t('birth_month'), '<p class="small muted" style="margin:0">' + t('dob_once') + '</p><select class="inp" id="dm">' + SS.MONTH_OPTIONS(0) + '</select><button class="btn dark big" id="sv">' + t('save') + '</button>');
+  m.el.querySelector('#sv').onclick = async () => {
+    const v = Number(m.el.querySelector('#dm').value) || 0;
+    if (!v) return;
+    await SS.run(async () => {
+      await SS.db.collection('users').doc(S.user.uid).set({ dobMonth: v }, { merge: true });
+      S.profile.dobMonth = v;
+      await SS.db.collection('shops').doc(S.cur).collection('members').doc(S.mobile).update({ dobMonth: v });
+    }, t('saved'));
+    m.close();
+  };
+}
+async function openHistory() {
+  const m = SS.sheet(t('points_history'), '<div class="list" id="hl"><div class="empty">' + t('loading') + '</div></div>');
+  try {
+    const q = await SS.db.collection('shops').doc(S.cur).collection('ledger').where('memberId', '==', S.mobile).get();
+    const list = SS.docs(q).sort((a, b) => b.at - a.at);
+    m.el.querySelector('#hl').innerHTML = list.length ? list.map((l) => {
+      const plus = l.points >= 0;
+      return '<div class="item" style="cursor:default"><span class="ic">' + ic(plus ? 'plus' : 'gift', 20) + '</span><span class="t"><b>' + esc(t('lg_' + l.type)) + '</b><span>' + SS.fmtDT(l.at) + (l.note ? ' · ' + esc(l.note) : '') + '</span></span><b style="color:' + (plus ? '#1E6B3A' : '#9B2C2C') + '">' + (plus ? '+' : '') + SS.fmtPts(l.points) + '</b></div>';
+    }).join('') : '<div class="empty">' + t('no_history') + '</div>';
+  } catch (e) { m.el.querySelector('#hl').innerHTML = '<div class="err">' + esc(SS.authErr(e)) + '</div>'; }
+}
+async function openShops() {
+  const ids = S.profile.shops;
+  const m = SS.sheet(t('my_shops'), '<div class="list" id="sl"></div><button class="btn dark big" id="jn">' + ic('plus') + t('join_new_shop') + '</button>');
+  const box = m.el.querySelector('#sl');
+  const rows = [];
+  for (const id of ids) {
+    let name = S.shopNames[id];
+    if (!name) { try { const d = await SS.db.collection('shops').doc(id).get(); name = d.exists ? d.data().name : id; S.shopNames[id] = name; } catch (e) { name = id; } }
+    rows.push('<button class="item" data-sh="' + esc(id) + '"><span class="ic">' + ic('shop', 20) + '</span><span class="t"><b>' + esc(name) + '</b><span>' + esc(id) + '</span></span>' + (id === S.cur ? '<span class="pill ok">' + t('current') + '</span>' : ic('chev')) + '</button>');
+  }
+  box.innerHTML = rows.join('');
+  SS.$$('[data-sh]', box).forEach((b) => (b.onclick = () => { m.close(); if (b.dataset.sh !== S.cur) { S.tab = 'home'; selectShop(b.dataset.sh); } }));
+  m.el.querySelector('#jn').onclick = () => { m.close(); renderJoin(''); };
+}
+function notifText(n) {
+  if (n.kind === 'approved') return { title: t('n_ok_t'), body: t('n_ok_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points) }) };
+  if (n.kind === 'rejected') return { title: t('n_rej_t'), body: t('n_rej_b', { a: SS.fmtRs(n.amount), r: n.reason || '' }) };
+  if (n.kind === 'referral') return { title: t('n_ref_t'), body: t('n_ref_b', { p: SS.fmtPts(n.points), n: n.name || '' }) };
+  if (n.kind === 'gift') return { title: t('n_gift_t'), body: t('n_gift_b', { g: n.gift || '', p: SS.fmtPts(n.points) }) };
+  if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) };
+  return { title: n.title || 'ShopSathi', body: n.body || '' };
+}
+function openNotifs() {
+  const list = S.notifs;
+  const m = SS.sheet(t('notifications'), '<div class="list">' + (list.length ? list.map((n) => {
+    const x = notifText(n);
+    return '<div class="item" style="cursor:default' + (n.read ? '' : ';border-color:#D9A833') + '"><span class="ic">' + ic(n.kind === 'rejected' || n.kind === 'gift_cancel' ? 'x' : n.kind === 'gift' ? 'gift' : 'check', 20) + '</span><span class="t"><b>' + esc(x.title) + '</b><span>' + esc(x.body) + ' · ' + SS.fmtDT(n.at) + '</span></span></div>';
+  }).join('') : '<div class="empty">' + t('no_notifs') + '</div>') + '</div>');
+  const un = list.filter((n) => !n.read);
+  if (un.length) {
+    const b = SS.db.batch();
+    un.forEach((n) => b.update(SS.db.collection('shops').doc(S.cur).collection('members').doc(S.mobile).collection('notifs').doc(n.id), { read: true }));
+    b.commit().catch(() => {});
+  }
+  return m;
+}
+function bindCommon() {
+  SS.$$('[data-tab]').forEach((b) => (b.onclick = () => { S.tab = b.dataset.tab; draw(); window.scrollTo(0, 0); }));
+  const bell = SS.$('#bell'); if (bell) bell.onclick = openNotifs;
+  const sw = SS.$('#swShop'); if (sw) sw.onclick = openShops;
+  SS.$$('[data-bill]').forEach((b) => (b.onclick = () => openBill(b.dataset.bill)));
+}
+
+/* ---------------- Bill detail ---------------- */
+async function openBill(id) {
+  const b = S.bills.find((x) => x.id === id);
+  if (!b) return;
+  const st = b._local ? t('st_queued') : t('st_' + b.status);
+  const m = SS.sheet(t('bill_detail'),
+    '<div class="photo-pick" id="ph" style="cursor:zoom-in">' + (b.thumb ? '<img alt="Bill" src="' + b.thumb + '">' : ic('image', 40)) + '</div>' +
+    '<div class="card"><div class="kv"><span>' + t('status') + '</span><b>' + esc(st) + '</b></div>' +
+    '<div class="kv"><span>' + t('bill_date') + '</span><b>' + SS.fmtDateFull(b.billDate) + '</b></div>' +
+    (b.billNo ? '<div class="kv"><span>' + t('bill_no') + '</span><b>' + esc(b.billNo) + '</b></div>' : '') +
+    '<div class="kv"><span>' + t('amount_you') + '</span><b>' + SS.fmtRs(b.amount) + '</b></div>' +
+    (b.status === 'approved' ? '<div class="kv"><span>' + t('amount_final') + '</span><b>' + SS.fmtRs(b.finalAmount) + '</b></div><div class="kv"><span>' + t('points_got') + '</span><b style="color:#1E6B3A">+' + SS.fmtPts(b.points) + '</b></div>' : '') +
+    (b.status === 'rejected' ? '<div class="kv"><span>' + t('reason') + '</span><b style="color:#9B2C2C">' + esc(b.reason || '-') + '</b></div>' : '') +
+    '<div class="kv"><span>' + t('uploaded_at') + '</span><b>' + SS.fmtDT(b.uploadedAt) + '</b></div></div>' +
+    (b.status === 'pending' ? '<button class="btn danger full" id="rm">' + ic('trash') + t('remove_bill') + '</button>' : ''));
+  let full = null;
+  SS.db.collection('shops').doc(S.cur).collection('photos').doc(id).get().then((d) => {
+    if (d.exists && d.data().data) { full = d.data().data; m.el.querySelector('#ph').innerHTML = '<img alt="Bill" src="' + full + '">'; }
+  }).catch(() => {});
+  m.el.querySelector('#ph').onclick = () => { if (full || b.thumb) SS.zoom(full || b.thumb); };
+  const rm = m.el.querySelector('#rm');
+  if (rm) rm.onclick = async () => {
+    if (!(await SS.confirm(t('confirm_remove_bill'), t('remove_bill'), true))) return;
+    const sref = SS.db.collection('shops').doc(S.cur);
+    sref.collection('photos').doc(id).delete().catch(() => {});
+    sref.collection('bills').doc(id).delete().catch((e) => SS.toast(SS.authErr(e), 'err'));
+    m.close();
+  };
+}
+
+/* ---------------- Upload ---------------- */
+function openUpload() {
+  const sh = S.shop;
+  const today = SS.isoDate();
+  const minMs = Math.max(SS.dayStart(sh.schemeStart), SS.dayStart(SS.now() - (Number(sh.uploadDays) || 0) * 86400000));
+  const m = SS.sheet(t('upload_bill'),
+    '<input type="file" accept="image/*" capture="environment" id="fcam" class="hidden"><input type="file" accept="image/*" id="fgal" class="hidden">' +
+    '<div class="photo-pick" id="pp">' + ic('camera', 40) + '<b>' + t('take_photo') + '</b><span class="small">' + t('photo_hint') + '</span></div>' +
+    '<div class="btnrow"><button class="btn light sm" id="bcam">' + ic('camera', 18) + t('camera') + '</button><button class="btn light sm" id="bgal">' + ic('image', 18) + t('gallery') + '</button></div>' +
+    '<label class="f">' + t('bill_amount') + ' <small>' + t('bill_amount_hint') + '</small><input class="inp" id="amt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label>' +
+    '<div class="small muted" id="prev"></div>' +
+    '<label class="f">' + t('bill_date') + '<input class="inp" id="bd" type="date" value="' + today + '" max="' + today + '" min="' + SS.isoDate(minMs) + '"></label>' +
+    '<label class="f">' + t('bill_no') + ' <small>' + t('optional') + '</small><input class="inp" id="bn" autocomplete="off"></label>' +
+    '<div class="small muted">' + t('upload_rules', { d: sh.uploadDays || 0, m: SS.fmtRs(sh.minBill || 0) }) + '</div>' +
+    '<div id="uerr"></div>' +
+    '<button class="btn dark big" id="send">' + ic('check') + t('send_bill') + '</button>', { sticky: true });
+  let photo = null, thumb = null;
+  const el = m.el;
+  const pick = async (input) => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    try {
+      SS.busy(true);
+      photo = await SS.compress(f, 1100, 100);
+      thumb = await SS.compress(photo, 160, 8);
+      el.querySelector('#pp').innerHTML = '<img alt="Bill" src="' + photo + '">';
+    } catch (e) { SS.toast(t('err_photo'), 'err'); }
+    finally { SS.busy(false); input.value = ''; }
+  };
+  el.querySelector('#fcam').onchange = (e) => pick(e.target);
+  el.querySelector('#fgal').onchange = (e) => pick(e.target);
+  el.querySelector('#pp').onclick = () => el.querySelector('#fcam').click();
+  el.querySelector('#bcam').onclick = () => el.querySelector('#fcam').click();
+  el.querySelector('#bgal').onclick = () => el.querySelector('#fgal').click();
+  el.querySelector('#amt').oninput = (e) => {
+    const a = SS.num(e.target.value);
+    const c = SS.calcPoints(sh, a, S.member);
+    el.querySelector('#prev').innerHTML = !a ? '' : c.belowMin ? '<span style="color:#9B2C2C">' + t('below_min', { m: SS.fmtRs(sh.minBill) }) + '</span>' : t('approx_points', { p: SS.fmtPts(c.points) });
+  };
+  el.querySelector('#send').onclick = async () => {
+    const err = (msg) => (el.querySelector('#uerr').innerHTML = '<div class="err">' + esc(msg) + '</div>');
+    const amount = SS.num(el.querySelector('#amt').value);
+    const billDate = SS.fromIso(el.querySelector('#bd').value);
+    const billNo = el.querySelector('#bn').value.trim().toUpperCase();
+    if (!photo) return err(t('err_need_photo'));
+    if (!(amount > 0)) return err(t('err_amount'));
+    if (amount < (Number(sh.minBill) || 0)) return err(t('below_min', { m: SS.fmtRs(sh.minBill) }));
+    if (!billDate || billDate > SS.dayEnd()) return err(t('err_date'));
+    if (billDate < minMs) return err(t('err_old_bill', { d: sh.uploadDays }));
+    if (schemeState() !== 'on') return err(t('scheme_closed'));
+    if (S.member.blocked) return err(t('blocked_msg'));
+    const photoHash = await SS.hash(photo);
+    const dup = S.bills.find((b) => b.status !== 'rejected' && (b.photoHash === photoHash || (billNo && b.billNo === billNo)));
+    if (dup) return err(t('err_dup_own'));
+    const sref = SS.db.collection('shops').doc(S.cur);
+    const bref = sref.collection('bills').doc();
+    const now = SS.now();
+    const bill = {
+      memberId: S.mobile, memberName: S.member.name || S.profile.name || '', memberCode: S.member.code,
+      amount: amount, billNo: billNo, billDate: billDate, uploadedAt: now, status: 'pending', points: 0,
+      photoHash: photoHash, thumb: thumb, hasPhoto: true, by: 'customer'
+    };
+    // offline ho to bhi Firestore line mein rakhta hai — net aate hi upload
+    sref.collection('photos').doc(bref.id).set({ memberId: S.mobile, data: photo, at: now }).catch((e) => SS.toast(SS.authErr(e), 'err'));
+    bref.set(bill).catch((e) => SS.toast(SS.authErr(e), 'err'));
+    m.close();
+    SS.toast(navigator.onLine ? t('bill_sent') : t('bill_queued'), 'ok');
+    S.tab = 'home'; render();
+  };
+}
+
+/* ---------------- Account delete ---------------- */
+async function deleteAccount() {
+  if (!(await SS.confirm(t('confirm_delete_acc'), t('delete_account'), true))) return;
+  const pin = await SS.askPin(t('enter_pin_delete'));
+  if (!pin) return;
+  try {
+    SS.busy(true);
+    await SS.reauth(pin);
+    cleanup();
+    for (const id of S.profile.shops.slice()) {
+      const sref = SS.db.collection('shops').doc(id);
+      const mref = sref.collection('members').doc(S.mobile);
+      try {
+        await SS.deleteQuery(mref.collection('notifs'));
+        await SS.deleteQuery(sref.collection('photos').where('memberId', '==', S.mobile));
+        await SS.deleteQuery(sref.collection('bills').where('memberId', '==', S.mobile));
+        await SS.deleteQuery(sref.collection('ledger').where('memberId', '==', S.mobile));
+        await SS.deleteQuery(sref.collection('redemptions').where('memberId', '==', S.mobile));
+        await SS.db.runTransaction(async (tx) => {
+          const s = await tx.get(sref); const mm = await tx.get(mref);
+          if (mm.exists) tx.delete(mref);
+          if (s.exists && mm.exists) tx.update(sref, { customerCount: Math.max(0, (s.data().customerCount || 1) - 1) });
+        });
+      } catch (e) { console.warn('shop cleanup', id, e); }
+    }
+    await SS.db.collection('users').doc(S.user.uid).delete();
+    await S.user.delete();
+    localStorage.removeItem('ss_cur_shop');
+    SS.toast(t('account_deleted'), 'ok');
+  } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+  finally { SS.busy(false); }
+}
+
+boot();
+})();
+</script>
+</body>
+</html>
