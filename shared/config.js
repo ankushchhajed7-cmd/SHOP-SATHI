@@ -1,5 +1,5 @@
 /* ============================================================
-   ShopSathi v1.0.0 — CONFIG (sirf yahi file badalni hai)
+   ShopSathi v1.0.1 — CONFIG (sirf yahi file badalni hai)
    ------------------------------------------------------------
    1) Firebase Console > Project settings > General > Your apps
       > Web app (</>) > "SDK setup and configuration" > Config
@@ -9,19 +9,19 @@
    ============================================================ */
 window.SS_CONFIG = {
   firebase: {
-    apiKey: "PASTE_API_KEY",
-    authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-    projectId: "PASTE_PROJECT_ID",
-    storageBucket: "PASTE_PROJECT_ID.appspot.com",
-    messagingSenderId: "PASTE_SENDER_ID",
-    appId: "PASTE_APP_ID"
+    apiKey: "AIzaSyB5y0FDpukxMB9DKLxDGHqFFO0xghgAAEw",
+    authDomain: "shopsathi-25794.firebaseapp.com",
+    projectId: "shopsathi-25794",
+    storageBucket: "shopsathi-25794.firebasestorage.app",
+    messagingSenderId: "1086395739587",
+    appId: "1:1086395739587:web:91d41c0f246eb181962176"
   },
 
   // Super Admin (sirf aap) — 10 digit mobile, bina +91
-  adminMobile: "9999999999",
+  adminMobile: "9765838383",
 
   // Paid plan / help ke liye aapka WhatsApp (91 + number)
-  adminWhatsApp: "919999999999",
+  adminWhatsApp: "919765838383",
 
   // Paid plan payment ke liye UPI ID (khali chhod sakte hain)
   upiId: "",
