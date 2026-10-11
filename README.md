@@ -1,4 +1,4 @@
-# ShopSathi v1.1.1 — har bill par reward points
+# ShopSathi v1.1.2 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.1.2 (11 Oct 2026)** — Business Settings → "Customer data saaf karein (fresh start)": test ke saare customers, bills, photos, points hatao; dukaan, settings, gifts aur QR code wahi. Customer number phir 0001 se (naye rules Publish karein).
 - **v1.1.1 (11 Oct 2026)** — Super Admin ab install ho sakta hai (apna maroon + shield icon, "SS Admin").
 - **v1.1.0 (11 Oct 2026)** — free plan hataya; nayi dukaan admin ki manzoori ya **activation code** se hi chalu (Firebase rules mein pakka); Super Admin: Approve +30 din / +1 saal / Lifetime / Mana, Activation codes banana-bhejna; plan khatam hone se 7 din pehle chetavni; Settings mein "Naye customer ko pehle main approve karunga"; LICENSE file + © Ankush New Vision. **Update ke baad `firestore.rules` dobara Publish karein aur apni dukaan ko admin se Lifetime dein.**
 - **v1.0.9 (11 Oct 2026)** — duplicate chetavni ab Devanagari Hindi mein (Hinglish chuna ho tab bhi), laal/naarangi square border ke saath blink karti hai; "डुप्लिकेट?" nishaan bhi blink karta hai.

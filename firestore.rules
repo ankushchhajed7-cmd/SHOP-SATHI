@@ -1,6 +1,6 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.1.1 — Firestore Security Rules
+// ShopSathi v1.1.2 — Firestore Security Rules
 // v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
@@ -107,7 +107,12 @@ service cloud.firestore {
             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
                  ['ownerUid', 'plan', 'paidUntil', 'active', 'createdAt', 'customerCount', 'nextCode', 'shortCode', 'licenseCode', 'licensedAt']))
         || (signedIn() && counterChange())
-        || (signedIn() && redeem());
+        || (signedIn() && redeem())
+        // fresh start: malik saare customers hatane ke baad ginti 0 aur code 1 se
+        || (signedIn() && resource.data.ownerUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['customerCount', 'nextCode', 'freshAt'])
+            && request.resource.data.customerCount == 0
+            && request.resource.data.nextCode == 1);
 
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 

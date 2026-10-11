@@ -1053,6 +1053,7 @@ function vSettings() {
     '<div class="sec-title"><span>' + t('new_scheme') + '</span></div><div class="small muted">' + t('new_scheme_help') + '</div>' +
     '<button class="btn light full" id="nsch">' + ic('refresh') + t('new_scheme') + '</button>' +
     '<div class="sec-title"><span style="color:#9B2C2C">' + t('danger_zone') + '</span></div>' +
+    '<div class="small muted">' + t('fresh_help') + '</div><button class="btn danger full" id="fresh">' + ic('refresh') + t('fresh_btn') + '</button>' +
     '<button class="btn danger full" id="delshop">' + ic('trash') + t('delete_shop') + '</button></main>';
 }
 async function saveSettings() {
@@ -1129,6 +1130,37 @@ async function photoArchive() {
       }
     }, t('photos_cleared'));
   } catch (e) { SS.toast(e && e.code ? SS.authErr(e) : t('err_lib'), 'err'); }
+  finally { SS.busy(false); }
+}
+/* fresh start: saare customers, bills, photos, points, gift requests hatao — dukaan, settings, gifts, QR code wahi */
+async function freshStart() {
+  if (!(await SS.confirm(SS.tDev('fresh_confirm', { n: B.members.length }), SS.tDev('fresh_btn'), true))) return;
+  const pin = await SS.askPin(t('enter_pin_delete'));
+  if (!pin) return;
+  try {
+    SS.busy(true);
+    await SS.reauth(pin);
+    const sref = shopRef();
+    const mem = (await sref.collection('members').get()).docs;
+    for (const d of mem) await SS.deleteQuery(d.ref.collection('notifs'));
+    for (const c of ['bills', 'photos', 'ledger', 'redemptions']) await SS.deleteQuery(sref.collection(c));
+    // customers ek-ek karke, saath mein ginti ghatao
+    for (const d of mem) {
+      await SS.db.runTransaction(async (tx) => {
+        const sd = (await tx.get(sref)).data(), mm = await tx.get(d.ref);
+        if (!mm.exists) return;
+        tx.delete(d.ref);
+        if ((sd.customerCount || 0) > 0) tx.update(sref, { customerCount: sd.customerCount - 1 });
+      });
+    }
+    // customer code phir AK-0001 se (naye rules chahiye)
+    let codeReset = true;
+    try { await sref.update({ customerCount: 0, nextCode: 1, freshAt: SS.now() }); } catch (e) { codeReset = false; }
+    B.recent = null; B.custBills = null; B.monthStats = null;
+    loadMonthStats();
+    SS.toast(codeReset ? t('fresh_ok') : t('fresh_ok_code'), 'ok');
+    B.view = null; B.tab = 'home'; draw();
+  } catch (e) { SS.toast(SS.authErr(e), 'err'); }
   finally { SS.busy(false); }
 }
 async function deleteShop() {
@@ -1290,6 +1322,7 @@ function bindAll() {
     on('arch', photoArchive);
     on('nsch', newScheme);
     on('delshop', deleteShop);
+    on('fresh', freshStart);
     const bk = SS.$('#back'); if (bk) bk.onclick = () => { B.drawing = null; B.view = null; B.keepScroll = false; draw(); };
   }
   // staff
