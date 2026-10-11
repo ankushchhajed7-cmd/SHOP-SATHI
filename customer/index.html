@@ -487,6 +487,7 @@ function notifText(n) {
   if (n.kind === 'rejected') return { title: t('n_rej_t'), body: t('n_rej_b', { a: SS.fmtRs(n.amount), r: n.reason || '' }) };
   if (n.kind === 'referral') return { title: t('n_ref_t'), body: t('n_ref_b', { p: SS.fmtPts(n.points), n: n.name || '' }) };
   if (n.kind === 'gift') return { title: t('n_gift_t'), body: t('n_gift_b', { g: n.gift || '', p: SS.fmtPts(n.points) }) };
+  if (n.kind === 'reversed') return { title: t('n_rev_t'), body: t('n_rev_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points), r: n.reason || '' }) };
   if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) };
   return { title: n.title || 'ShopSathi', body: n.body || '' };
 }
@@ -494,7 +495,7 @@ function openNotifs() {
   const list = S.notifs;
   const m = SS.sheet(t('notifications'), '<div class="list">' + (list.length ? list.map((n) => {
     const x = notifText(n);
-    return '<div class="item" style="cursor:default' + (n.read ? '' : ';border-color:#D9A833') + '"><span class="ic">' + ic(n.kind === 'rejected' || n.kind === 'gift_cancel' ? 'x' : n.kind === 'gift' ? 'gift' : 'check', 20) + '</span><span class="t"><b>' + esc(x.title) + '</b><span>' + esc(x.body) + ' · ' + SS.fmtDT(n.at) + '</span></span></div>';
+    return '<div class="item" style="cursor:default' + (n.read ? '' : ';border-color:#D9A833') + '"><span class="ic">' + ic(n.kind === 'rejected' || n.kind === 'gift_cancel' || n.kind === 'reversed' ? 'x' : n.kind === 'gift' ? 'gift' : 'check', 20) + '</span><span class="t"><b>' + esc(x.title) + '</b><span>' + esc(x.body) + ' · ' + SS.fmtDT(n.at) + '</span></span></div>';
   }).join('') : '<div class="empty">' + t('no_notifs') + '</div>') + '</div>');
   const un = list.filter((n) => !n.read);
   if (un.length) {
@@ -593,8 +594,11 @@ function openUpload() {
     if (schemeState() !== 'on') return err(t('scheme_closed'));
     if (S.member.blocked) return err(t('blocked_msg'));
     const photoHash = await SS.hash(photo);
-    const dup = S.bills.find((b) => b.status !== 'rejected' && (b.photoHash === photoHash || (billNo && b.billNo === billNo)));
-    if (dup) return err(t('err_dup_own'));
+    // duplicate: wahi photo / wahi bill no. / same din + same amount — upload hi nahi hoga
+    const nb = { memberId: S.mobile, photoHash: photoHash, billNo: billNo, billDate: billDate, amount: amount };
+    const kinds = S.bills.map((b) => SS.dupKind(nb, b));
+    if (kinds.indexOf('photo') >= 0 || kinds.indexOf('billno') >= 0) return err(t('err_dup_own'));
+    if (kinds.indexOf('day') >= 0) return err(t('err_dup_day', { a: SS.fmtRs(amount), d: SS.fmtDate(billDate) }));
     const sref = SS.db.collection('shops').doc(S.cur);
     const bref = sref.collection('bills').doc();
     const now = SS.now();
