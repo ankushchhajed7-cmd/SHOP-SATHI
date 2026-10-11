@@ -84,7 +84,7 @@ function renderAuth(mode) {
     '<div id="aerr"></div><button class="btn dark big" type="submit">' + (mode === 'signup' ? t('create_account') : t('login')) + '</button></form>' +
     '<p class="small muted center" style="margin:0">' + t('staff_login_hint') + '</p>' +
     '<p class="small muted center" style="margin:0">' + t('forgot_pin_biz') + '</p>' +
-    '<div class="ver">ShopSathi Business v' + SS.VERSION + '</div></main></div>';
+    '<div class="ver">ShopSathi Business v' + SS.VERSION + '<br>© Ankush New Vision</div></main></div>';
   SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); renderAuth(mode); };
   SS.$$('[data-m]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.m)));
   SS.$('#af').onsubmit = async (e) => {
@@ -230,7 +230,7 @@ async function createShop() {
       schemeStart: d.schemeStart, schemeEnd: d.schemeEnd, settlementDate: d.settlementDate, schemeNo: 1,
       welcomeBonus: d.welcomeBonus, referBonus: d.referBonus, birthdayDouble: d.birthdayDouble, festival2x: d.festival2x,
       goldSpend: d.goldSpend, goldMult: d.goldMult, platSpend: d.platSpend, platMult: d.platMult,
-      plan: 'free', paidUntil: 0, active: true, customerCount: 0, nextCode: 1, createdAt: SS.now()
+      plan: 'pending', paidUntil: 0, active: false, approveJoin: false, customerCount: 0, nextCode: 1, createdAt: SS.now()
     };
     await SS.db.collection('shops').doc(id).set(shop);
     await SS.db.collection('users').doc(B.user.uid).set({ ownShop: id, name: d.ownerName }, { merge: true });
@@ -238,7 +238,7 @@ async function createShop() {
     for (let i = 0; i < d.gifts.length; i++) await gref.add({ name: d.gifts[i].name, points: d.gifts[i].points, photo: d.gifts[i].photo || '', stock: -1, active: true, at: SS.now() + i });
     B.profile.ownShop = id; B.shopId = id; B.shop = shop; B.role = 'owner';
     W.data = null; W.step = 1;
-    SS.toast(t('shop_created'), 'ok');
+    SS.toast(t('shop_created_pending'), 'ok');
     B.view = { name: 'qr' };
     start();
   } catch (e) { SS.toast(SS.authErr(e), 'err'); }
@@ -259,7 +259,7 @@ function groupHTML(g, d) {
     '<div class="small muted" id="pm_ex"></div>' +
     inp('minBill', t('min_bill'), 'number', { hint: t('min_bill_hint') }) + inp('uploadDays', t('upload_days'), 'number', { hint: t('upload_days_hint') });
   if (g === 'scheme') return '<b>' + t('scheme') + '</b>' + inp('schemeStart', t('scheme_start'), 'date') + inp('schemeEnd', t('scheme_end'), 'date') + inp('settlementDate', t('settle_date'), 'date', { hint: t('settle_hint') });
-  if (g === 'bonus') return '<b>' + t('bonus_points') + '</b>' + inp('welcomeBonus', t('welcome_bonus'), 'number', { hint: t('zero_off') }) + inp('referBonus', t('refer_bonus'), 'number', { hint: t('refer_bonus_hint') }) + chk('birthdayDouble', t('birthday_double')) + chk('festival2x', t('festival_2x'));
+  if (g === 'bonus') return '<b>' + t('bonus_points') + '</b>' + inp('welcomeBonus', t('welcome_bonus'), 'number', { hint: t('zero_off') }) + inp('referBonus', t('refer_bonus'), 'number', { hint: t('refer_bonus_hint') }) + chk('birthdayDouble', t('birthday_double')) + chk('festival2x', t('festival_2x')) + chk('approveJoin', t('approve_join_set'));
   if (g === 'levels') return '<b>' + t('levels') + '</b><div class="small muted">' + t('levels_hint') + '</div>' +
     '<div class="row">' + inp('goldSpend', t('gold_from'), 'number') + inp('goldMult', t('multiplier'), 'number') + '</div>' +
     '<div class="row">' + inp('platSpend', t('plat_from'), 'number') + inp('platMult', t('multiplier'), 'number') + '</div>';
@@ -314,7 +314,7 @@ function readGroup(g, root, d) {
     if (!d.schemeStart || !d.schemeEnd || d.schemeEnd < d.schemeStart) return t('err_scheme_dates');
     if (!d.settlementDate || d.settlementDate < d.schemeEnd) return t('err_settle_date');
   }
-  if (g === 'bonus') { d.welcomeBonus = n('welcomeBonus'); d.referBonus = n('referBonus'); d.birthdayDouble = c('birthdayDouble'); d.festival2x = c('festival2x'); }
+  if (g === 'bonus') { d.welcomeBonus = n('welcomeBonus'); d.referBonus = n('referBonus'); d.birthdayDouble = c('birthdayDouble'); d.festival2x = c('festival2x'); d.approveJoin = c('approveJoin'); }
   if (g === 'levels') {
     d.goldSpend = n('goldSpend'); d.goldMult = n('goldMult') || 1; d.platSpend = n('platSpend'); d.platMult = n('platMult') || 1;
     if (d.platSpend && d.goldSpend && d.platSpend <= d.goldSpend) return t('err_levels');
@@ -364,7 +364,7 @@ function render() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; d
 function draw() {
   if (!B.shop) return;
   if (B.drawing && B.drawing()) return; // ek sheet/form khula hai to background redraw mat karo
-  if (!B.shop.active) return drawLocked();
+  if (!SS.shopOk(B.shop)) return drawLocked();
   const y = window.scrollY;
   let html;
   if (B.view) html = ({ cust: vCustomer, reports: vReports, settings: vSettings, staff: vStaff, qr: vQR }[B.view.name] || vHome)();
@@ -389,11 +389,51 @@ function sub(title, right) {
   return '<div class="subhdr"><button class="iconbtn" id="back" aria-label="' + t('back') + '">' + ic('back') + '</button><h2 class="ellipsis">' + esc(title) + '</h2>' + (right || '') + '</div>';
 }
 function tabHdr(title) { return '<header class="mhdr" style="padding-bottom:16px">' + topRow() + '<div class="hello">' + esc(title) + '</div></header>'; }
+function adminWaLink(kind) {
+  const sh = B.shop;
+  const msg = t(kind === 'pending' ? 'wa_approve_msg' : 'wa_renew_msg', { s: sh.name, id: B.shopId, o: sh.ownerName || '', m: sh.mobile || B.mobile, c: sh.city || '' });
+  return 'https://wa.me/' + (SS.CFG.adminWhatsApp || '') + '?text=' + encodeURIComponent(msg);
+}
+/* dukaan chalu nahi: approval baaki / plan khatam / admin ne band ki */
 function drawLocked() {
-  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + '<b>' + esc(B.shop.name) + '</b></div><main class="page"><div class="err">' + ic('lock', 18) + ' ' + t('shop_locked') + '</div>' +
-    '<a class="btn gold big" href="' + SS.wa(SS.CFG.adminWhatsApp ? '' : '', '') + '" id="wa">' + ic('wa') + t('contact_admin') + '</a><button class="btn light big" id="lo">' + ic('logout') + t('logout') + '</button></main></div>';
-  SS.$('#wa').href = 'https://wa.me/' + (SS.CFG.adminWhatsApp || '') + '?text=' + encodeURIComponent('ShopSathi ' + B.shopId + ' — ' + B.shop.name);
+  const sh = B.shop;
+  const kind = sh.plan === 'pending' ? 'pending' : sh.active ? 'expired' : 'off';
+  const msg = kind === 'pending' ? t('lock_pending') : kind === 'expired' ? (sh.paidUntil ? t('lock_expired', { d: SS.fmtDateFull(sh.paidUntil) }) : t('lock_nofree')) : t('shop_locked');
+  const owner = isOwner();
+  const codeBox = owner && kind !== 'off'
+    ? '<div class="card col"><b>' + t('lic_have') + '</b><input class="inp" id="lic" placeholder="XXXX-XXXX" autocapitalize="characters" maxlength="9" style="font-size:22px;letter-spacing:3px;text-align:center"><div id="licerr"></div><button class="btn dark big" id="licgo">' + ic('check') + t('lic_activate') + '</button></div>'
+    : '';
+  app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(72) + '<b>' + esc(sh.name) + '</b><span class="small">' + esc(B.shopId) + '</span></div><main class="page">' +
+    '<div class="' + (kind === 'pending' ? 'warn' : 'err') + '">' + ic(kind === 'pending' ? 'clock' : 'lock', 18) + ' ' + msg + '</div>' +
+    (owner ? codeBox + '<div class="sec-title"><span>' + t('lic_or') + '</span></div><a class="btn gold big" target="_blank" rel="noopener" href="' + esc(adminWaLink(kind)) + '">' + ic('wa') + (kind === 'pending' ? t('wa_approve_btn') : t('contact_admin')) + '</a>'
+      : '<div class="small muted center">' + t('lock_staff') + '</div>') +
+    '<div class="small muted center">' + t('lock_data_safe') + '</div>' +
+    '<button class="btn light big" id="lo">' + ic('logout') + t('logout') + '</button>' +
+    '<div class="ver">ShopSathi Business v' + SS.VERSION + ' · © Ankush New Vision</div></main></div>';
   SS.$('#lo').onclick = () => SS.logout();
+  const go = SS.$('#licgo');
+  if (go) go.onclick = async () => {
+    const box = SS.$('#licerr');
+    try { await redeemCode(SS.$('#lic').value); } catch (e) { box.innerHTML = '<div class="err">' + esc(e.code ? SS.authErr(e) : e.message) + '</div>'; }
+  };
+}
+/* activation code: license doc 'used' + dukaan chalu/plan badhao — ek hi transaction */
+async function redeemCode(raw) {
+  const code = SS.normLic(raw);
+  if (!code) throw new Error(t('lic_bad'));
+  const lref = SS.db.collection('licenses').doc(code), sref = shopRef();
+  await SS.run(() => SS.db.runTransaction(async (tx) => {
+    const l = await tx.get(lref);
+    if (!l.exists) throw new Error(t('lic_nf'));
+    const ld = l.data();
+    if (ld.used) throw new Error(t('lic_used'));
+    const sd = (await tx.get(sref)).data();
+    if (!sd.active && sd.plan !== 'pending') throw new Error(t('shop_locked'));
+    const now = SS.now();
+    const until = Math.max(now, Number(sd.paidUntil) || 0) + (Number(ld.days) || 0) * 86400000;
+    tx.update(lref, { used: true, usedBy: B.shopId, usedAt: now, usedByName: sd.name || '' });
+    tx.update(sref, { plan: 'paid', active: true, paidUntil: until, licenseCode: code, licensedAt: now });
+  }), t('lic_ok'));
 }
 
 /* ---------------- Home ---------------- */
@@ -403,10 +443,11 @@ function vHome() {
   const total = Math.max(1, sh.schemeEnd - sh.schemeStart);
   const pct = Math.min(100, Math.max(0, ((SS.now() - sh.schemeStart) / total) * 100));
   const ms = B.monthStats;
-  const limit = SS.CFG.freeLimit || 50;
   let notes = '';
-  if (sh.plan !== 'paid' && (sh.customerCount || 0) >= limit - 5) notes += '<div class="warn">' + t('plan_near', { n: sh.customerCount || 0, l: limit }) + ' <button class="lnk" id="upg">' + t('upgrade') + '</button></div>';
-  if (sh.plan === 'paid' && sh.paidUntil && sh.paidUntil < SS.now()) notes += '<div class="warn">' + t('plan_expired') + ' <button class="lnk" id="upg">' + t('renew') + '</button></div>';
+  const leftDays = Math.ceil(((Number(sh.paidUntil) || 0) - SS.now()) / 86400000);
+  if (leftDays <= 7) notes += '<div class="warn">' + t('plan_ending', { n: leftDays, d: SS.fmtDateFull(sh.paidUntil) }) + ' <button class="lnk" id="upg">' + t('renew') + '</button></div>';
+  const pj = B.members.filter((x) => x.pending).length;
+  if (pj) notes += '<button class="warn dupalert" data-tab="customers" style="text-align:left;cursor:pointer;font:inherit;font-weight:600;width:100%">' + ic('users', 18) + ' ' + t('join_wait_biz', { n: pj }) + '</button>';
   if (SS.now() > SS.dayEnd(sh.schemeEnd)) notes += '<div class="warn">' + t('biz_scheme_over') + '</div>';
   if (sh.festival2x) notes += '<div class="okbox">' + ic('star', 18) + ' ' + t('festival_on_biz') + '</div>';
   const name = B.role === 'owner' ? sh.ownerName : (sh.staff && sh.staff[B.user.uid] && sh.staff[B.user.uid].name) || B.profile.name || '';
@@ -418,7 +459,7 @@ function vHome() {
     '<main class="page">' + notes +
     '<button class="btn dark big" data-tab="bills">' + ic('receipt') + t('check_bills') + (B.pending.length ? ' (' + B.pending.length + ')' : '') + '</button>' +
     '<div class="stats">' +
-    '<button class="stat" data-tab="customers"><b>' + (sh.customerCount || B.members.length) + (sh.plan !== 'paid' ? '<span class="small muted">/' + limit + '</span>' : '') + '</b><span>' + t('customers') + '</span></button>' +
+    '<button class="stat" data-tab="customers"><b>' + (sh.customerCount || B.members.length) + '</b><span>' + t('customers') + '</span></button>' +
     '<button class="stat" data-tab="gifts"><b>' + B.reds.length + '</b><span>' + t('gift_requests') + '</span></button>' +
     '<div class="stat" style="cursor:default"><b style="font-size:20px">' + (ms ? SS.fmtRs(Math.round(ms.sales)) : '…') + '</b><span>' + t('month_sales') + '</span></div>' +
     '<div class="stat" style="cursor:default"><b style="font-size:20px">' + (ms ? SS.fmtPts(ms.points) : '…') + '</b><span>' + t('month_points') + '</span></div></div>' +
@@ -674,13 +715,44 @@ function vCustomers() {
   const chip = (k, l) => '<button class="chip ' + (B.custSort === k ? 'on' : '') + '" data-cs="' + k + '">' + l + '</button>';
   return tabHdr(t('customers') + ' (' + B.members.length + ')') + '<main class="page">' +
     '<div class="btnrow"><button class="btn light sm" id="scanc">' + ic('scan', 18) + t('scan_qr') + '</button><button class="btn dark sm" id="addc">' + ic('plus', 18) + t('add_customer') + '</button></div>' +
+    pendingJoinHTML() +
     '<div class="search">' + ic('search', 20) + '<input class="inp" id="cq" type="search" placeholder="' + t('search_cust') + '" value="' + esc(B.custQuery) + '" aria-label="' + t('search_cust') + '"></div>' +
     '<div class="chips">' + chip('name', t('sort_name')) + chip('points', t('sort_points')) + chip('blocked', t('blocked')) + '</div>' +
     '<div class="list" id="clist">' + custRows(list) + '</div></main>';
 }
+/* naye customer jo manzoori ka intezaar kar rahe hain (Settings: approveJoin) */
+function pendingJoinHTML() {
+  const pend = B.members.filter((m) => m.pending).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+  if (!pend.length) return '';
+  return '<div class="sec-title"><span>' + t('join_wait_title', { n: pend.length }) + '</span></div><div class="list">' + pend.map((m) =>
+    '<div class="item dupalert" style="cursor:default"><span class="ic">' + ic('user', 20) + '</span><span class="t"><b>' + esc(m.name || '-') + '</b><span>' + esc(m.code) + ' · ' + esc(m.id) + ' · ' + SS.fmtDate(m.joinedAt) + '</span></span>' +
+    '<button class="btn ok sm" data-jok="' + esc(m.id) + '" aria-label="' + t('join_approve') + '">' + ic('check', 18) + '</button>' +
+    (isOwner() ? '<button class="btn danger sm" data-jno="' + esc(m.id) + '" aria-label="' + t('join_reject') + '">' + ic('x', 18) + '</button>' : '') + '</div>').join('') + '</div>';
+}
+function approveJoin(id) {
+  const sref = shopRef(), mref = sref.collection('members').doc(id), b = SS.db.batch(), now = SS.now();
+  b.update(mref, { pending: false, joinApprovedAt: now, joinApprovedBy: whoAmI() });
+  b.set(mref.collection('notifs').doc(), { kind: 'join_ok', at: now, read: false });
+  return SS.run(() => b.commit(), t('join_approved_ok'));
+}
+async function rejectJoin(id) {
+  const m = B.memMap[id] || {};
+  if (!(await SS.confirm(t('join_reject_confirm', { n: m.name || id }), t('join_reject'), true))) return;
+  const sref = shopRef(), mref = sref.collection('members').doc(id);
+  await SS.run(async () => {
+    await SS.deleteQuery(mref.collection('notifs'));
+    await SS.deleteQuery(sref.collection('ledger').where('memberId', '==', id));
+    await SS.db.runTransaction(async (tx) => {
+      const sd = (await tx.get(sref)).data(), mm = await tx.get(mref);
+      if (!mm.exists) return;
+      tx.delete(mref);
+      tx.update(sref, { customerCount: Math.max(0, (sd.customerCount || 1) - 1) });
+    });
+  }, t('join_rejected_ok'));
+}
 function custRows(list) {
   if (!list.length) return '<div class="empty">' + t('no_customers') + '</div>';
-  return list.slice(0, 300).map((m) => '<button class="item" data-cust="' + esc(m.id) + '"><span class="ic">' + ic(m.appUser ? 'user' : 'phone', 20) + '</span><span class="t"><b>' + esc(m.name || '-') + (m.blocked ? ' <span class="pill rej">' + t('blocked') + '</span>' : '') + '</b><span>' + esc(m.code) + ' · ' + esc(m.id) + '</span></span><span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px"><b>' + SS.fmtPts(m.points) + '</b><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></span></button>').join('');
+  return list.slice(0, 300).map((m) => '<button class="item" data-cust="' + esc(m.id) + '"><span class="ic">' + ic(m.appUser ? 'user' : 'phone', 20) + '</span><span class="t"><b>' + esc(m.name || '-') + (m.blocked ? ' <span class="pill rej">' + t('blocked') + '</span>' : '') + (m.pending ? ' <span class="pill pend">' + t('join_pending_pill') + '</span>' : '') + '</b><span>' + esc(m.code) + ' · ' + esc(m.id) + '</span></span><span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px"><b>' + SS.fmtPts(m.points) + '</b><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></span></button>').join('');
 }
 function vCustomer() {
   const m = B.memMap[B.view.id];
@@ -740,7 +812,6 @@ function addCustomer() {
           const sd = (await tx.get(sref)).data();
           const ex = await tx.get(mref);
           if (ex.exists) throw new Error(t('cust_exists'));
-          if (sd.plan !== 'paid' && (sd.customerCount || 0) >= (SS.CFG.freeLimit || 50)) throw new Error(t('err_limit_biz'));
           welcome = Number(sd.welcomeBonus) || 0;
           tx.set(mref, { mobile: mob, name: name, uid: '', appUser: false, code: sd.shortCode + '-' + SS.pad(sd.nextCode || 1), points: welcome, lifetimePoints: welcome, totalSpend: 0, level: 'silver', blocked: false, joinedAt: SS.now(), referredBy: '', referralPaid: false, dobMonth: dob, billCount: 0, addedBy: B.user.uid });
           tx.update(sref, { nextCode: (sd.nextCode || 1) + 1, customerCount: (sd.customerCount || 0) + 1 });
@@ -882,11 +953,11 @@ function vMore() {
   return tabHdr(t('nav_more')) + '<main class="page"><div class="list menu">' +
     it('m_qr', 'qr', t('shop_qr'), t('shop_qr_sub')) +
     it('m_rep', 'chart', t('reports'), t('reports_sub')) +
-    it('m_plan', 'star', t('plan'), sh.plan === 'paid' ? t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) }) : t('plan_free_n', { n: sh.customerCount || 0, l: SS.CFG.freeLimit || 50 })) +
+    it('m_plan', 'star', t('plan'), t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) })) +
     (isOwner() ? it('m_set', 'settings', t('settings'), t('settings_sub')) + it('m_staff', 'users', t('staff'), t('staff_sub')) + it('m_xl', 'download', t('excel_backup'), t('excel_sub')) : '') +
     '</div><label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
     '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
-    '<div class="ver">ShopSathi Business v' + SS.VERSION + ' · ' + esc(B.mobile) + ' · ' + t(isOwner() ? 'owner' : 'staff') + '</div></main>';
+    '<div class="ver">ShopSathi Business v' + SS.VERSION + ' · ' + esc(B.mobile) + ' · ' + t(isOwner() ? 'owner' : 'staff') + '<br>© Ankush New Vision</div></main>';
 }
 function vQR() {
   const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(B.shopId);
@@ -990,7 +1061,7 @@ async function saveSettings() {
     const er = readGroup(g, app, d);
     if (er) { SS.$('#serr').innerHTML = '<div class="err">' + esc(er) + '</div>'; return; }
   }
-  const keys = ['name', 'ownerName', 'type', 'city', 'address', 'logo', 'pointsMode', 'percent', 'rupeesPerPoint', 'minBill', 'uploadDays', 'schemeStart', 'schemeEnd', 'settlementDate', 'welcomeBonus', 'referBonus', 'birthdayDouble', 'festival2x', 'goldSpend', 'goldMult', 'platSpend', 'platMult'];
+  const keys = ['name', 'ownerName', 'type', 'city', 'address', 'logo', 'pointsMode', 'percent', 'rupeesPerPoint', 'minBill', 'uploadDays', 'schemeStart', 'schemeEnd', 'settlementDate', 'welcomeBonus', 'referBonus', 'birthdayDouble', 'festival2x', 'approveJoin', 'goldSpend', 'goldMult', 'platSpend', 'platMult'];
   const upd = {}; keys.forEach((k) => (upd[k] = d[k]));
   try { await SS.run(() => shopRef().update(upd), t('saved')); B.drawing = null; B.view = null; B.tab = 'more'; draw(); } catch (e) {}
 }
@@ -1124,15 +1195,20 @@ async function removeStaff(uid) {
 function openPlan() {
   const sh = B.shop, price = SS.CFG.planPrice || 199;
   const upi = SS.CFG.upiId ? 'upi://pay?pa=' + encodeURIComponent(SS.CFG.upiId) + '&pn=ShopSathi&am=' + price + '&cu=INR&tn=' + encodeURIComponent('ShopSathi ' + B.shopId) : '';
-  const msg = t('upgrade_msg', { id: B.shopId, s: sh.name, p: price });
-  SS.sheet(t('plan'),
-    '<div class="card"><div class="kv"><span>' + t('plan') + '</span><b>' + (sh.plan === 'paid' ? t('plan_paid') : t('plan_free')) + '</b></div>' +
-    '<div class="kv"><span>' + t('customers') + '</span><b>' + (sh.customerCount || 0) + (sh.plan === 'paid' ? '' : ' / ' + (SS.CFG.freeLimit || 50)) + '</b></div>' +
-    (sh.plan === 'paid' ? '<div class="kv"><span>' + t('valid_till') + '</span><b>' + SS.fmtDateFull(sh.paidUntil) + '</b></div>' : '') + '</div>' +
+  const m = SS.sheet(t('plan'),
+    '<div class="card"><div class="kv"><span>' + t('valid_till') + '</span><b>' + SS.fmtDateFull(sh.paidUntil) + '</b></div>' +
+    '<div class="kv"><span>' + t('customers') + '</span><b>' + (sh.customerCount || 0) + '</b></div>' +
+    (sh.licenseCode ? '<div class="kv"><span>' + t('lic_last') + '</span><b>' + esc(sh.licenseCode) + '</b></div>' : '') + '</div>' +
     '<div class="okbox">' + t('plan_paid_info', { p: price }) + '</div>' +
+    (isOwner() ? '<div class="card col"><b>' + t('lic_have') + '</b><input class="inp" id="lic" placeholder="XXXX-XXXX" autocapitalize="characters" maxlength="9" style="font-size:20px;letter-spacing:3px;text-align:center"><div id="licerr"></div><button class="btn dark full" id="licgo">' + ic('check') + t('lic_activate') + '</button></div>' : '') +
     (upi ? '<a class="btn gold big" href="' + esc(upi) + '">' + t('pay_upi', { p: price }) + '</a>' : '') +
-    '<a class="btn dark big" target="_blank" rel="noopener" href="https://wa.me/' + esc(SS.CFG.adminWhatsApp || '') + '?text=' + encodeURIComponent(msg) + '">' + ic('wa') + t('contact_admin') + '</a>' +
+    '<a class="btn light big" target="_blank" rel="noopener" href="' + esc(adminWaLink('renew')) + '">' + ic('wa') + t('contact_admin') + '</a>' +
     '<div class="small muted">' + t('plan_after_pay') + '</div>');
+  const go = m.el.querySelector('#licgo');
+  if (go) go.onclick = async () => {
+    try { await redeemCode(m.el.querySelector('#lic').value); m.close(); }
+    catch (e) { m.el.querySelector('#licerr').innerHTML = '<div class="err">' + esc(e.code ? SS.authErr(e) : e.message) + '</div>'; }
+  };
 }
 
 /* ---------------- Bindings ---------------- */
@@ -1146,6 +1222,8 @@ function bindAll() {
   on('scanc', scanCustomer);
   on('addc', addCustomer);
   on('upg', openPlan);
+  SS.$$('[data-jok]').forEach((b) => (b.onclick = () => approveJoin(b.dataset.jok).catch(() => {})));
+  SS.$$('[data-jno]').forEach((b) => (b.onclick = () => rejectJoin(b.dataset.jno).catch(() => {})));
   // bills
   SS.$$('[data-bm]').forEach((b) => (b.onclick = () => { B.billMode = b.dataset.bm; if (B.billMode === 'recent') { B.recent = null; loadRecent(); } draw(); }));
   // customers

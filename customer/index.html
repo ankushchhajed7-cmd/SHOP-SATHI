@@ -78,7 +78,7 @@ function renderAuth(mode) {
     '<button class="btn dark big" type="submit">' + (mode === 'signup' ? t('create_account') : t('login')) + '</button>' +
     '</form>' +
     '<p class="small muted center" style="margin:0">' + t('forgot_pin_cust') + '</p>' +
-    '<div class="ver">ShopSathi v' + SS.VERSION + '</div></main></div>';
+    '<div class="ver">ShopSathi v' + SS.VERSION + '<br>© Ankush New Vision</div></main></div>';
   SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); renderAuth(mode); };
   SS.$$('[data-m]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.m)));
   SS.$('#af').onsubmit = async (e) => {
@@ -164,7 +164,7 @@ async function findShop() {
   try { snap = await SS.db.collection('shops').doc(code).get(); } catch (e) { box.innerHTML = '<div class="err">' + esc(SS.authErr(e)) + '</div>'; return; }
   if (!snap.exists) { box.innerHTML = '<div class="err">' + t('err_shop_nf') + '</div>'; return; }
   const sh = snap.data();
-  if (!sh.active) { box.innerHTML = '<div class="err">' + t('err_shop_off') + '</div>'; return; }
+  if (!SS.shopOk(sh)) { box.innerHTML = '<div class="err">' + t('err_shop_off') + '</div>'; return; }
   const already = S.profile.shops.indexOf(code) >= 0;
   box.innerHTML =
     '<div class="card col"><div class="row">' + (sh.logo ? '<img src="' + sh.logo + '" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover">' : '<span class="item"><span class="ic">' + ic('shop') + '</span></span>') +
@@ -182,12 +182,12 @@ async function joinShop(code, sh) {
   const memRef = shopRef.collection('members').doc(S.mobile);
   try {
     SS.busy(true);
-    let created = false, welcome = 0;
+    let created = false, welcome = 0, pendingJoin = false;
     await SS.db.runTransaction(async (tx) => {
       const s = await tx.get(shopRef);
       const m = await tx.get(memRef);
       const d = s.data();
-      if (!d.active) throw new Error(t('err_shop_off'));
+      if (!SS.shopOk(d)) throw new Error(t('err_shop_off'));
       if (m.exists) {
         const upd = { uid: S.user.uid, appUser: true };
         if (!m.data().name && S.profile.name) upd.name = S.profile.name;
@@ -195,15 +195,15 @@ async function joinShop(code, sh) {
         tx.update(memRef, upd);
         return;
       }
-      if (d.plan !== 'paid' && (d.customerCount || 0) >= (SS.CFG.freeLimit || 50)) throw new Error(t('err_limit'));
       welcome = Number(d.welcomeBonus) || 0;
       const codeStr = d.shortCode + '-' + SS.pad(d.nextCode || 1);
       tx.set(memRef, {
         mobile: S.mobile, name: S.profile.name || '', uid: S.user.uid, appUser: true, code: codeStr,
         points: welcome, lifetimePoints: welcome, totalSpend: 0, level: 'silver', blocked: false,
         joinedAt: SS.now(), referredBy: ref && ref !== codeStr ? ref : '', referralPaid: false,
-        dobMonth: Number(S.profile.dobMonth) || 0, billCount: 0
+        dobMonth: Number(S.profile.dobMonth) || 0, billCount: 0, pending: !!d.approveJoin
       });
+      pendingJoin = !!d.approveJoin;
       tx.update(shopRef, { nextCode: (d.nextCode || 1) + 1, customerCount: (d.customerCount || 0) + 1 });
       created = true;
     });
@@ -214,7 +214,7 @@ async function joinShop(code, sh) {
     if (S.profile.shops.indexOf(code) < 0) S.profile.shops.push(code);
     S.joinCode = '';
     if (history.replaceState) history.replaceState(null, '', location.pathname);
-    SS.toast(created && welcome > 0 ? t('joined_bonus', { p: SS.fmtPts(welcome) }) : t('joined'), 'ok');
+    SS.toast(pendingJoin ? t('join_pending_toast') : created && welcome > 0 ? t('joined_bonus', { p: SS.fmtPts(welcome) }) : t('joined'), 'ok');
     selectShop(code);
   } catch (e) { SS.toast(e.code ? SS.authErr(e) : e.message, 'err'); }
   finally { SS.busy(false); }
@@ -311,7 +311,8 @@ function drawHome() {
   const days = SS.daysLeft(sh.schemeEnd);
   const month = new Date().getMonth() + 1;
   let notes = '';
-  if (!sh.active) notes += '<div class="err">' + t('err_shop_off') + '</div>';
+  if (!SS.shopOk(sh)) notes += '<div class="err">' + t('err_shop_off') + '</div>';
+  if (m.pending) notes += '<div class="warn dupalert">' + ic('clock', 18) + ' ' + t('join_pending_cust') + '</div>';
   if (m.blocked) notes += '<div class="err">' + t('blocked_msg') + '</div>';
   if (ss === 'before') notes += '<div class="warn">' + t('scheme_before', { d: SS.fmtDateFull(sh.schemeStart) }) + '</div>';
   if (ss === 'after') notes += '<div class="warn">' + t('scheme_after', { d: SS.fmtDateFull(sh.settlementDate) }) + '</div>';
@@ -320,7 +321,7 @@ function drawHome() {
   const open = S.reds.filter((r) => r.status === 'requested');
   if (open.length) notes += '<div class="warn">' + t('gift_req_open', { g: esc(open.map((r) => r.giftName).join(', ')) }) + '</div>';
   else if (ng.best && !m.blocked) notes += '<button class="okbox" data-tab="gifts" style="border:none;text-align:left;cursor:pointer;font:inherit;font-weight:600">' + ic('gift', 18) + ' ' + t('can_get_cust', { g: esc(ng.best.name) }) + '</button>';
-  const canUp = sh.active && !m.blocked && ss === 'on';
+  const canUp = SS.shopOk(sh) && !m.blocked && !m.pending && ss === 'on';
   return '<header class="mhdr">' + topRow() +
     '<div class="hello">' + t('namaste') + ', ' + esc((m.name || S.profile.name || '').split(' ')[0]) + '</div>' +
     '<div class="bigpts"><div style="display:flex;flex-direction:column;line-height:1"><span class="lbl">' + t('reward_points') + '</span><span class="num">' + SS.fmtPts(pts) + '</span></div>' +
@@ -367,7 +368,7 @@ function drawGifts() {
   else h += '<div class="gifts">' + S.gifts.map((g) => {
     const reach = pts >= g.points;
     const out = g.stock === 0;
-    const can = reach && avail >= g.points && settleOk && !out && !S.member.blocked;
+    const can = reach && avail >= g.points && settleOk && !out && !S.member.blocked && !S.member.pending;
     const p = Math.min(100, (pts / g.points) * 100);
     return '<div class="gift">' + (reach ? '<span class="tick" aria-label="' + t('reachable') + '">' + ic('check', 18) + '</span>' : '') +
       '<div class="gimg">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 48)) + '</div>' +
@@ -414,7 +415,7 @@ function drawProfile() {
     '<button class="btn light full" id="edit">' + ic('edit') + t('edit_name') + '</button>' +
     '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
     '<button class="btn danger full" id="del">' + ic('trash') + t('delete_account') + '</button>' +
-    '<div class="ver">ShopSathi v' + SS.VERSION + '</div></main>';
+    '<div class="ver">ShopSathi v' + SS.VERSION + '<br>© Ankush New Vision</div></main>';
 }
 function levelInfo(sh) {
   if (!(sh.goldSpend > 0 || sh.platSpend > 0)) return '';
@@ -487,6 +488,7 @@ function notifText(n) {
   if (n.kind === 'rejected') return { title: t('n_rej_t'), body: t('n_rej_b', { a: SS.fmtRs(n.amount), r: n.reason || '' }) };
   if (n.kind === 'referral') return { title: t('n_ref_t'), body: t('n_ref_b', { p: SS.fmtPts(n.points), n: n.name || '' }) };
   if (n.kind === 'gift') return { title: t('n_gift_t'), body: t('n_gift_b', { g: n.gift || '', p: SS.fmtPts(n.points) }) };
+  if (n.kind === 'join_ok') return { title: t('n_join_t'), body: t('n_join_b', { s: (S.shop && S.shop.name) || '' }) };
   if (n.kind === 'reversed') return { title: t('n_rev_t'), body: t('n_rev_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points), r: n.reason || '' }) };
   if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) };
   return { title: n.title || 'ShopSathi', body: n.body || '' };
@@ -593,6 +595,8 @@ function openUpload() {
     if (billDate < minMs) return err(t('err_old_bill', { d: sh.uploadDays }));
     if (schemeState() !== 'on') return err(t('scheme_closed'));
     if (S.member.blocked) return err(t('blocked_msg'));
+    if (S.member.pending) return err(t('join_pending_cust'));
+    if (!SS.shopOk(sh)) return err(t('err_shop_off'));
     const photoHash = await SS.hash(photo);
     // duplicate: wahi photo / wahi bill no. / same din + same amount — upload hi nahi hoga
     const nb = { memberId: S.mobile, photoHash: photoHash, billNo: billNo, billDate: billDate, amount: amount };
