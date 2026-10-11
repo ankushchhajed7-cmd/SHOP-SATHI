@@ -167,5 +167,7 @@ nav.bnav .dot{position:absolute;top:0;right:8px;min-width:18px;height:18px;borde
 .qrbox .code{font-size:26px;font-weight:800;letter-spacing:2px}
 .qrimg{width:220px;height:220px;display:flex;align-items:center;justify-content:center}
 .qrimg img,.qrimg canvas{width:220px!important;height:220px!important}
-#scanbox{width:100%;min-height:260px;border-radius:14px;overflow:hidden;background:#000}
+#scanbox{width:100%;min-height:260px;border-radius:14px;overflow:hidden;background:#000;position:relative}
+#scanbox video{width:100%;height:300px;object-fit:cover;display:block}
+.scanframe{position:absolute;left:50%;top:50%;width:200px;height:200px;transform:translate(-50%,-50%);border:3px solid var(--gold);border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
 .ver{font-size:12px;color:var(--muted);text-align:center;padding:6px}

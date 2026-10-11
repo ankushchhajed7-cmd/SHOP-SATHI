@@ -3,6 +3,7 @@
 <head>
 <!--
   ShopSathi — Business App (dukaandar + staff)
+  v1.0.5 (2026-10-11): customer ka janamdin mahina dukaandar customer page se set kare; naya QR scanner.
   v1.0.4 (2026-10-11): setup Step 5 mein gift ki photo (optional); points ka % QR/home par nahi dikhta.
   v1.0.3 (2026-10-11): Business app ka alag icon (gunmetal + gold briefcase badge).
   v1.0.2 (2026-10-11): install fix — manifest ko alag id (Chrome "already installed / could not open app" khatam).
@@ -620,7 +621,7 @@ function vCustomer() {
     '<div class="kv"><span>' + t('joined_on') + '</span><b>' + SS.fmtDateFull(m.joinedAt) + '</b></div>' +
     '<div class="kv"><span>' + t('app') + '</span><b>' + (m.appUser ? t('yes') : t('no_smartphone')) + '</b></div>' +
     (m.referredBy ? '<div class="kv"><span>' + t('referred_by') + '</span><b>' + esc(m.referredBy) + (m.referralPaid ? ' ✓' : '') + '</b></div>' : '') +
-    (m.dobMonth ? '<div class="kv"><span>' + t('birth_month') + '</span><b>' + SS.MONTHS[m.dobMonth - 1] + '</b></div>' : '') + '</div>' +
+    (B.shop.birthdayDouble ? '<div class="kv"><span>' + t('birth_month') + '</span><b>' + (m.dobMonth ? SS.MONTHS[m.dobMonth - 1] + ' ' : '') + '<button class="lnk" id="setdob">' + (m.dobMonth ? t('change') : t('set')) + '</button></b></div>' : '') + '</div>' +
     (m.blocked ? '<div class="err">' + t('cust_blocked') + '</div>' : '') +
     '<div class="btnrow"><a class="btn light" href="tel:' + esc(m.id) + '">' + ic('phone') + t('call') + '</a><a class="btn light" target="_blank" rel="noopener" href="' + SS.wa(m.id, waText) + '">' + ic('wa') + 'WhatsApp</a></div>' +
     '<div class="btnrow"><button class="btn dark" id="addbill">' + ic('plus') + t('add_bill') + '</button>' + (isOwner() ? '<button class="btn ' + (m.blocked ? 'light' : 'danger') + '" id="blk">' + ic('ban') + (m.blocked ? t('unblock') : t('block')) + '</button>' : '') + '</div>' +
@@ -1075,6 +1076,14 @@ function bindAll() {
     if (!B.custData || B.custData.id !== B.view.id) { if (B.loadingCust !== B.view.id) { B.loadingCust = B.view.id; loadCust(B.view.id).then(() => (B.loadingCust = null)); } }
     SS.$$('[data-ct]').forEach((b) => (b.onclick = () => { B.view.tab = b.dataset.ct; draw(); }));
     on('addbill', () => addBill(B.view.id));
+    on('setdob', () => {
+      const mm = B.memMap[B.view.id];
+      const sh = SS.sheet(t('birth_month'), '<select class="inp" id="dm">' + SS.MONTH_OPTIONS(mm.dobMonth || 0) + '</select><button class="btn dark big" id="sv">' + t('save') + '</button>');
+      sh.el.querySelector('#sv').onclick = async () => {
+        const v = Number(sh.el.querySelector('#dm').value) || 0;
+        try { await SS.run(() => shopRef().collection('members').doc(mm.id).update({ dobMonth: v }), t('saved')); sh.close(); } catch (e) {}
+      };
+    });
     on('blk', async () => {
       const m = B.memMap[B.view.id];
       if (!(await SS.confirm(m.blocked ? t('confirm_unblock') : t('confirm_block'), m.blocked ? t('unblock') : t('block'), !m.blocked))) return;
