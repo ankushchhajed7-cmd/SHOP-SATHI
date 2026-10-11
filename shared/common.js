@@ -1,6 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
-   v1.0.6 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
+   v1.0.7 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
    v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.0.6';
+  SS.VERSION = '1.0.7';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -270,6 +270,8 @@
       '<div id="scanbox"><video id="scanvid" playsinline muted autoplay style="visibility:hidden"></video><div class="scanframe"></div></div>' +
       '<p class="small muted center" id="scanmsg" style="margin:0">' + SS.t('scan_hint') + '</p>' +
       '<input type="file" accept="image/*" capture="environment" id="scanfile" class="hidden">' +
+      '<input type="file" accept="image/*" id="scanfile2" class="hidden">' +
+      '<button class="btn gold full" id="scangal">' + SS.ic('image') + SS.t('scan_gallery') + '</button>' +
       '<button class="btn light full" id="scanphoto">' + SS.ic('camera') + SS.t('scan_photo') + '</button>', { onClose: stop });
     const el = m.el;
     let stream = null, timer = 0, done = false, h5 = null;
@@ -286,23 +288,39 @@
       onText(String(txt || '').trim());
     }
     function msg(t2, bad) { const x = el.querySelector('#scanmsg'); if (x) { x.textContent = t2; x.style.color = bad ? '#9B2C2C' : ''; x.style.fontWeight = bad ? '600' : ''; } }
-    // photo se scan (har jagah chalta hai)
-    el.querySelector('#scanphoto').onclick = () => el.querySelector('#scanfile').click();
-    el.querySelector('#scanfile').onchange = async (e) => {
-      const f = e.target.files && e.target.files[0]; if (!f) return;
+    // photo se scan (camera ya gallery — har jagah chalta hai)
+    async function h5File(f) {
+      if (!window.Html5Qrcode) return null;
+      const tmp = document.createElement('div'); tmp.id = 'scantmp' + Date.now(); tmp.style.display = 'none'; document.body.appendChild(tmp);
+      try { return await new Html5Qrcode(tmp.id).scanFile(f, false); } catch (er) { return null; } finally { tmp.remove(); }
+    }
+    async function detFile(f) {
+      if (!det) return null;
       try {
-        if (det) {
-          const bmp = await createImageBitmap(f);
-          const codes = await det.detect(bmp);
-          if (codes.length) return finish(codes[0].rawValue);
-        } else if (window.Html5Qrcode) {
-          const tmp = document.createElement('div'); tmp.id = 'scantmp'; tmp.style.display = 'none'; document.body.appendChild(tmp);
-          try { const r = await new Html5Qrcode('scantmp').scanFile(f, false); tmp.remove(); return finish(r); } catch (er) { tmp.remove(); }
+        let bmp = await createImageBitmap(f);
+        let codes = await det.detect(bmp);
+        if (!codes.length && Math.max(bmp.width, bmp.height) > 1400) {
+          // badi photo ko chhota karke dobara try
+          const k = 1200 / Math.max(bmp.width, bmp.height), c = document.createElement('canvas');
+          c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+          c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+          codes = await det.detect(c);
         }
-        msg(SS.t('err_qr_nf'), true);
-      } catch (er) { msg(SS.t('err_qr_nf'), true); }
+        return codes.length ? codes[0].rawValue : null;
+      } catch (er) { return null; }
+    }
+    async function fromFile(e) {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      msg(SS.t('scan_reading'));
+      const r = (await detFile(f)) || (await h5File(f));
       e.target.value = '';
-    };
+      if (r) return finish(r);
+      msg(SS.t('err_qr_nf'), true);
+    }
+    el.querySelector('#scanphoto').onclick = () => el.querySelector('#scanfile').click();
+    el.querySelector('#scangal').onclick = () => el.querySelector('#scanfile2').click();
+    el.querySelector('#scanfile').onchange = fromFile;
+    el.querySelector('#scanfile2').onchange = fromFile;
     // live camera
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(SS.t('err_cam_perm'), true); return; }
     const camErr = (er) => msg(SS.t('err_cam_perm') + ' [' + ((er && er.name) || 'error') + ']', true);
