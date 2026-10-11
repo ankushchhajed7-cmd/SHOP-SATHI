@@ -3,6 +3,7 @@
 <head>
 <!--
   ShopSathi — Customer App
+  v1.0.5 (2026-10-11): janamdin ka mahina customer se nahi poochha jata; naya QR scanner (camera + photo se scan).
   v1.0.4 (2026-10-11): points ka % / niyam customer ko nahi dikhta.
   v1.0.3 (2026-10-11): version sync (business icon alag).
   v1.0.2 (2026-10-11): install fix — manifest ko alag id (Chrome "already installed / could not open app" khatam).
@@ -73,7 +74,6 @@ function renderAuth(mode) {
     (mode === 'signup' ? '<label class="f">' + t('your_name') + '<input class="inp" id="nm" autocomplete="name" required></label>' : '') +
     '<label class="f">' + t('mobile') + '<input class="inp" id="mb" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="98XXXXXXXX" required></label>' +
     '<label class="f">' + t('pin') + ' <small>' + t('pin_hint') + '</small><input class="inp" id="pn" type="password" inputmode="numeric" maxlength="6" autocomplete="' + (mode === 'signup' ? 'new-password' : 'current-password') + '" required></label>' +
-    (mode === 'signup' ? '<label class="f">' + t('birth_month') + ' <small>' + t('optional') + '</small><select class="inp" id="dob">' + SS.MONTH_OPTIONS(0) + '</select></label>' : '') +
     '<div id="aerr"></div>' +
     '<button class="btn dark big" type="submit">' + (mode === 'signup' ? t('create_account') : t('login')) + '</button>' +
     '</form>' +
@@ -92,7 +92,7 @@ function renderAuth(mode) {
       if (mode === 'signup') {
         const nm = SS.$('#nm').value.trim();
         if (nm.length < 2) { SS.busy(false); return err(t('err_name')); }
-        S.pendingSignup = { name: nm, dobMonth: Number(SS.$('#dob').value) || 0 };
+        S.pendingSignup = { name: nm, dobMonth: 0 };
         await SS.signup(mb, pn);
       } else {
         await SS.login(mb, pn);
@@ -407,7 +407,6 @@ function drawProfile() {
     '<div class="kv"><span>' + t('mobile') + '</span><b>' + esc(S.mobile) + '</b></div>' +
     '<div class="kv"><span>' + t('level') + '</span><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></div>' +
     '<div class="kv"><span>' + t('total_purchase') + '</span><b>' + SS.fmtRs(m.totalSpend || 0) + '</b></div>' +
-    '<div class="kv"><span>' + t('birth_month') + '</span><b>' + (m.dobMonth ? SS.MONTHS[m.dobMonth - 1] : '<button class="lnk" id="setdob">' + t('set') + '</button>') + '</b></div>' +
     levelInfo(sh) + '</div>' +
     (sh.referBonus > 0 ? '<div class="card col"><b>' + t('refer_title') + '</b><span class="small muted">' + t('refer_help', { p: SS.fmtPts(sh.referBonus) }) + '</span><button class="btn gold" id="refer" data-link="' + esc(link) + '">' + ic('share') + t('refer_share') + '</button></div>' : '') +
     '<div class="btnrow"><button class="btn light" id="hist">' + ic('list') + t('points_history') + '</button><button class="btn light" id="shops">' + ic('shop') + t('my_shops') + '</button></div>' +
@@ -431,7 +430,6 @@ function bindProfile() {
   SS.$('#lo').onclick = async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); };
   SS.$('#del').onclick = deleteAccount;
   SS.$('#edit').onclick = editName;
-  const sd = SS.$('#setdob'); if (sd) sd.onclick = setDob;
 }
 function editName() {
   const m = SS.sheet(t('edit_name'), '<label class="f">' + t('your_name') + '<input class="inp" id="en" value="' + esc(S.member.name || S.profile.name || '') + '"></label><button class="btn dark big" id="sv">' + t('save') + '</button>');

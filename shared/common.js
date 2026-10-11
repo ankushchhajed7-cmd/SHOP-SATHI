@@ -1,5 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
+   v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
    v1.0.2 (2026-10-11) — PWA install fix (unique manifest id)
@@ -9,7 +10,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.0.4';
+  SS.VERSION = '1.0.5';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -262,16 +263,67 @@
     }
     el.textContent = text;
   };
-  /* camera se QR scan (html5-qrcode). onText(text) */
+  /* camera se QR scan. 1) BarcodeDetector + live camera  2) html5-qrcode  3) photo khinch kar scan */
   SS.scan = function (onText) {
-    const m = SS.sheet(SS.t('scan_qr'), '<div id="scanbox"></div><p class="small muted center" style="margin:0">' + SS.t('scan_hint') + '</p>', { onClose: stop });
-    let q = null, done = false;
-    function stop() { if (q) { try { q.stop().then(() => q.clear()).catch(() => {}); } catch (e) {} q = null; } }
-    if (!window.Html5Qrcode) { SS.toast(SS.t('err_cam'), 'err'); return; }
-    q = new Html5Qrcode('scanbox');
-    q.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 }, (txt) => {
-      if (done) return; done = true; stop(); m.el.parentNode.remove(); onText(txt);
-    }, () => {}).catch(() => { SS.toast(SS.t('err_cam'), 'err'); });
+    const m = SS.sheet(SS.t('scan_qr'),
+      '<div id="scanbox"><video id="scanvid" playsinline muted autoplay></video><div class="scanframe"></div></div>' +
+      '<p class="small muted center" id="scanmsg" style="margin:0">' + SS.t('scan_hint') + '</p>' +
+      '<input type="file" accept="image/*" capture="environment" id="scanfile" class="hidden">' +
+      '<button class="btn light full" id="scanphoto">' + SS.ic('camera') + SS.t('scan_photo') + '</button>', { onClose: stop });
+    const el = m.el;
+    let stream = null, timer = 0, done = false, h5 = null;
+    const det = ('BarcodeDetector' in window) ? (function () { try { return new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { return null; } })() : null;
+    function stop() {
+      done = true; clearTimeout(timer);
+      if (stream) { stream.getTracks().forEach((tr) => tr.stop()); stream = null; }
+      if (h5) { try { h5.stop().then(() => h5.clear()).catch(() => {}); } catch (e) {} h5 = null; }
+    }
+    function finish(txt) {
+      if (done) return;
+      stop();
+      if (el.parentNode) el.parentNode.remove();
+      onText(String(txt || '').trim());
+    }
+    function msg(t2, bad) { const x = el.querySelector('#scanmsg'); if (x) { x.textContent = t2; x.style.color = bad ? '#9B2C2C' : ''; x.style.fontWeight = bad ? '600' : ''; } }
+    // photo se scan (har jagah chalta hai)
+    el.querySelector('#scanphoto').onclick = () => el.querySelector('#scanfile').click();
+    el.querySelector('#scanfile').onchange = async (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      try {
+        if (det) {
+          const bmp = await createImageBitmap(f);
+          const codes = await det.detect(bmp);
+          if (codes.length) return finish(codes[0].rawValue);
+        } else if (window.Html5Qrcode) {
+          const tmp = document.createElement('div'); tmp.id = 'scantmp'; tmp.style.display = 'none'; document.body.appendChild(tmp);
+          try { const r = await new Html5Qrcode('scantmp').scanFile(f, false); tmp.remove(); return finish(r); } catch (er) { tmp.remove(); }
+        }
+        msg(SS.t('err_qr_nf'), true);
+      } catch (er) { msg(SS.t('err_qr_nf'), true); }
+      e.target.value = '';
+    };
+    // live camera
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(SS.t('err_cam_perm'), true); return; }
+    if (det) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then((st) => {
+        if (done) { st.getTracks().forEach((tr) => tr.stop()); return; }
+        stream = st;
+        const v = el.querySelector('#scanvid');
+        v.srcObject = st; v.play().catch(() => {});
+        const tick = () => {
+          if (done) return;
+          if (v.readyState >= 2) {
+            det.detect(v).then((codes) => { if (codes.length) finish(codes[0].rawValue); else timer = setTimeout(tick, 250); }).catch(() => { timer = setTimeout(tick, 400); });
+          } else timer = setTimeout(tick, 200);
+        };
+        tick();
+      }).catch(() => msg(SS.t('err_cam_perm'), true));
+    } else if (window.Html5Qrcode) {
+      const box = el.querySelector('#scanbox');
+      box.innerHTML = '<div id="scanh5"></div>';
+      h5 = new Html5Qrcode('scanh5');
+      h5.start({ facingMode: 'environment' }, { fps: 10, qrbox: 200 }, (txt) => finish(txt), () => {}).catch(() => msg(SS.t('err_cam_perm'), true));
+    } else msg(SS.t('err_cam'), true);
   };
 
   /* ---------------- Notifications / SW ---------------- */
