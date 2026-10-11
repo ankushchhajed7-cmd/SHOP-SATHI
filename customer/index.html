@@ -3,6 +3,7 @@
 <head>
 <!--
   ShopSathi — Customer App
+  v1.0.4 (2026-10-11): points ka % / niyam customer ko nahi dikhta.
   v1.0.3 (2026-10-11): version sync (business icon alag).
   v1.0.2 (2026-10-11): install fix — manifest ko alag id (Chrome "already installed / could not open app" khatam).
   v1.0.1 (2026-10-11): Firebase config (shopsathi-25794) + admin number.
@@ -168,7 +169,6 @@ async function findShop() {
   box.innerHTML =
     '<div class="card col"><div class="row">' + (sh.logo ? '<img src="' + sh.logo + '" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover">' : '<span class="item"><span class="ic">' + ic('shop') + '</span></span>') +
     '<div class="grow"><b style="font-size:19px">' + esc(sh.name) + '</b><div class="muted small">' + esc(t('type_' + (sh.type || 'other'))) + ' · ' + esc(sh.city || '') + '</div></div></div>' +
-    '<div class="kv"><span>' + t('points_rule') + '</span><b>' + esc(SS.ruleText(sh)) + '</b></div>' +
     (sh.welcomeBonus > 0 ? '<div class="kv"><span>' + t('welcome_bonus') + '</span><b>' + SS.fmtPts(sh.welcomeBonus) + '</b></div>' : '') +
     '<div class="kv"><span>' + t('scheme') + '</span><b>' + SS.fmtDate(sh.schemeStart) + ' – ' + SS.fmtDateFull(sh.schemeEnd) + '</b></div>' +
     (already ? '<div class="okbox">' + t('already_joined') + '</div><button class="btn dark big" id="open">' + t('open') + '</button>'
@@ -328,7 +328,7 @@ function drawHome() {
     '<div class="bar" role="progressbar" aria-valuenow="' + Math.round(pct) + '" aria-valuemin="0" aria-valuemax="100"><i style="width:' + pct + '%"></i></div>' +
     '<div style="font-size:14px">' + gline + '</div></header>' +
     '<main class="page">' + notes +
-    '<div class="between"><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span><span class="small muted">' + esc(SS.ruleText(sh)) + '</span></div>' +
+    '<div class="between"><span class="lvl ' + (m.level || 'silver') + '">' + t('lvl_' + (m.level || 'silver')) + '</span></div>' +
     '<button class="btn dark big" id="up"' + (canUp ? '' : ' disabled') + '>' + ic('camera') + t('upload_bill') + '</button>' +
     '<div class="sec-title"><span>' + t('recent_bills') + '</span><button class="lnk" id="all">' + t('see_all') + '</button></div>' +
     '<div class="list">' + (S.bills.length ? S.bills.slice(0, 4).map(billRow).join('') : '<div class="empty">' + t('no_bills') + '</div>') + '</div>' +

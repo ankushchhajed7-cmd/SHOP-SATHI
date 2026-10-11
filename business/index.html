@@ -3,6 +3,7 @@
 <head>
 <!--
   ShopSathi — Business App (dukaandar + staff)
+  v1.0.4 (2026-10-11): setup Step 5 mein gift ki photo (optional); points ka % QR/home par nahi dikhta.
   v1.0.3 (2026-10-11): Business app ka alag icon (gunmetal + gold briefcase badge).
   v1.0.2 (2026-10-11): install fix — manifest ko alag id (Chrome "already installed / could not open app" khatam).
   v1.0.1 (2026-10-11): Firebase config (shopsathi-25794) + admin number.
@@ -159,8 +160,8 @@ function renderWizard() {
   if (s === 2) body = groupHTML('brand', d) + '<label class="f">' + t('short_code') + ' <small>' + t('short_code_hint') + '</small><input class="inp" id="f_shortCode" maxlength="4" value="' + esc(d.shortCode || initials(d.name)) + '" style="text-transform:uppercase;font-weight:700;letter-spacing:2px"></label>';
   if (s === 3) body = groupHTML('points', d);
   if (s === 4) body = groupHTML('scheme', d) + groupHTML('bonus', d) + groupHTML('levels', d);
-  if (s === 5) body = '<p class="muted" style="margin:0">' + t('wz5_help') + '</p><div class="list" id="wg">' + d.gifts.map((g, i) => '<div class="item" style="cursor:default"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(g.name) + '</b><span>' + SS.fmtPts(g.points) + ' pts</span></span><button class="iconbtn" data-rmg="' + i + '" aria-label="' + t('delete') + '">' + ic('trash', 18) + '</button></div>').join('') + '</div>' +
-    '<div class="row"><input class="inp grow" id="gn" placeholder="' + t('gift_name') + '"><input class="inp" id="gp" type="number" inputmode="decimal" placeholder="' + t('points') + '" style="width:110px"></div><button class="btn light" id="ga">' + ic('plus') + t('add_gift') + '</button>';
+  if (s === 5) body = '<p class="muted" style="margin:0">' + t('wz5_help') + '</p><div class="list" id="wg">' + d.gifts.map((g, i) => '<div class="item" style="cursor:default"><span class="ic">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 20)) + '</span><span class="t"><b>' + esc(g.name) + '</b><span>' + SS.fmtPts(g.points) + ' pts</span></span><button class="iconbtn" data-rmg="' + i + '" aria-label="' + t('delete') + '">' + ic('trash', 18) + '</button></div>').join('') + '</div>' +
+    '<input type="file" accept="image/*" id="gpf" class="hidden"><div class="row"><button type="button" class="photo-pick" id="gpp" style="min-height:0;width:64px;height:64px;padding:0;flex:none" aria-label="' + t('gift_photo') + '">' + (W.gphoto ? '<img alt="" src="' + W.gphoto + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px;max-height:none">' : ic('camera', 22)) + '</button><input class="inp grow" id="gn" placeholder="' + t('gift_name') + '" value="' + esc(W.gname || '') + '"><input class="inp" id="gp" type="number" inputmode="decimal" placeholder="' + t('points') + '" style="width:96px" value="' + esc(W.gpts || '') + '"></div><div class="small muted">' + t('gift_photo_opt') + '</div><button class="btn light" id="ga">' + ic('plus') + t('add_gift') + '</button>';
   app.innerHTML = '<div class="authwrap"><header class="mhdr"><div class="top">' + SS.logo(40) + '<div class="brand"><b><span>Shop</span>Sathi</b><small>' + t('setup') + ' · ' + t('step_of', { a: s, b: 5 }) + '</small></div></div>' + steps + '<div class="hello">' + titles[s] + '</div></header>' +
     '<main class="page" style="padding-bottom:30px"><form id="wf" class="col">' + body + '<div id="werr"></div><div class="btnrow">' +
     (s > 1 ? '<button type="button" class="btn light" id="prev">' + ic('back') + t('back') + '</button>' : '<button type="button" class="btn light" id="lo">' + ic('logout') + t('logout') + '</button>') +
@@ -169,10 +170,19 @@ function renderWizard() {
   const prev = SS.$('#prev'); if (prev) prev.onclick = () => { collectWiz(); W.step--; renderWizard(); };
   const lo = SS.$('#lo'); if (lo) lo.onclick = () => SS.logout();
   if (s === 5) {
+    SS.$('#gpp').onclick = () => SS.$('#gpf').click();
+    SS.$('#gpf').onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      W.gname = SS.$('#gn').value; W.gpts = SS.$('#gp').value;
+      try { SS.busy(true); W.gphoto = await SS.compress(f, 400, 40); } catch (er) { SS.toast(t('err_photo'), 'err'); } finally { SS.busy(false); }
+      renderWizard();
+    };
     SS.$('#ga').onclick = () => {
       const n = SS.$('#gn').value.trim(), p = SS.num(SS.$('#gp').value);
       if (!n || !(p > 0)) return SS.toast(t('err_gift'), 'err');
-      d.gifts.push({ name: n, points: p }); renderWizard();
+      d.gifts.push({ name: n, points: p, photo: W.gphoto || '' });
+      W.gphoto = ''; W.gname = ''; W.gpts = '';
+      renderWizard();
     };
     SS.$$('[data-rmg]').forEach((b) => (b.onclick = () => { d.gifts.splice(Number(b.dataset.rmg), 1); renderWizard(); }));
   }
@@ -224,7 +234,7 @@ async function createShop() {
     await SS.db.collection('shops').doc(id).set(shop);
     await SS.db.collection('users').doc(B.user.uid).set({ ownShop: id, name: d.ownerName }, { merge: true });
     const gref = SS.db.collection('shops').doc(id).collection('gifts');
-    for (let i = 0; i < d.gifts.length; i++) await gref.add({ name: d.gifts[i].name, points: d.gifts[i].points, photo: '', stock: -1, active: true, at: SS.now() + i });
+    for (let i = 0; i < d.gifts.length; i++) await gref.add({ name: d.gifts[i].name, points: d.gifts[i].points, photo: d.gifts[i].photo || '', stock: -1, active: true, at: SS.now() + i });
     B.profile.ownShop = id; B.shopId = id; B.shop = shop; B.role = 'owner';
     W.data = null; W.step = 1;
     SS.toast(t('shop_created'), 'ok');
@@ -416,7 +426,7 @@ function vHome() {
     '<button class="tile" id="addc"><span class="c">' + ic('plus') + '</span>' + t('add_customer') + '</button>' +
     '<button class="tile" data-view="qr"><span class="c">' + ic('qr') + '</span>' + t('shop_qr') + '</button>' +
     '<button class="tile" data-view="reports"><span class="c">' + ic('chart') + '</span>' + t('reports') + '</button></div>' +
-    '<div class="small muted center">' + t('shop_code') + ': <b style="color:#1F2226;letter-spacing:1px">' + esc(B.shopId) + '</b> · ' + esc(SS.ruleText(sh)) + '</div>' +
+    '<div class="small muted center">' + t('shop_code') + ': <b style="color:#1F2226;letter-spacing:1px">' + esc(B.shopId) + '</b></div>' +
     '</main>';
 }
 
@@ -793,7 +803,7 @@ function vMore() {
 }
 function vQR() {
   const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(B.shopId);
-  return sub(t('shop_qr')) + '<main class="page"><div id="printable" class="qrbox"><b style="font-size:22px">' + esc(B.shop.name) + '</b><div class="small muted">' + t('qr_poster_line') + '</div><div class="qrimg" id="sqr"></div><div class="small muted">' + t('shop_code') + '</div><div class="code">' + esc(B.shopId) + '</div><div class="small muted center">' + esc(SS.ruleText(B.shop)) + '</div><div style="display:flex;align-items:center;gap:6px">' + SS.logo(24) + '<b><span style="color:#6E4F0E">Shop</span>Sathi</b></div></div>' +
+  return sub(t('shop_qr')) + '<main class="page"><div id="printable" class="qrbox"><b style="font-size:22px">' + esc(B.shop.name) + '</b><div class="small muted">' + t('qr_poster_line') + '</div><div class="qrimg" id="sqr"></div><div class="small muted">' + t('shop_code') + '</div><div class="code">' + esc(B.shopId) + '</div><div style="display:flex;align-items:center;gap:6px">' + SS.logo(24) + '<b><span style="color:#6E4F0E">Shop</span>Sathi</b></div></div>' +
     '<div class="btnrow noprint"><button class="btn gold" id="shr">' + ic('share') + t('share') + '</button><button class="btn light" id="prt">' + ic('download') + t('print') + '</button></div>' +
     '<button class="btn light full noprint" id="cp">' + t('copy_link') + '</button><div class="small muted center noprint">' + esc(link) + '</div></main>';
 }
