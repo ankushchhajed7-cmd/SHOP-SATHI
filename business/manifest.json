@@ -8,23 +8,23 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F6F7F8",
-  "theme_color": "#C2C7CC",
+  "theme_color": "#2A2D31",
   "lang": "hi",
   "icons": [
     {
-      "src": "../icons/icon-192.png",
+      "src": "../icons/biz-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "../icons/icon-512.png",
+      "src": "../icons/biz-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "../icons/maskable-512.png",
+      "src": "../icons/biz-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
