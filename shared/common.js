@@ -1,6 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
-   v1.0.9 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
+   v1.1.0 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
    v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.0.9';
+  SS.VERSION = '1.1.0';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -74,6 +74,20 @@
   SS.dayEnd = (ms) => { const d = new Date(ms == null ? Date.now() : ms); d.setHours(23, 59, 59, 999); return d.getTime(); };
   SS.isoDate = (ms) => { const d = new Date(ms == null ? Date.now() : ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   SS.fromIso = (s) => { if (!s) return 0; const p = String(s).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]).getTime(); };
+  /* dukaan chalu hai? (admin ne band nahi ki + plan ki tareekh baaki) — free plan nahi hai */
+  SS.shopOk = (sh) => !!(sh && sh.active === true && (Number(sh.paidUntil) || 0) > Date.now());
+  SS.LIFETIME_DAYS = 36500;
+  /* activation code: 8 akshar, XXXX-XXXX (I, O, 0, 1 nahi — galti na ho) */
+  SS.LIC_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  SS.newLicCode = function () {
+    const a = new Uint8Array(8); crypto.getRandomValues(a);
+    let c = ''; for (let i = 0; i < 8; i++) { c += SS.LIC_CHARS[a[i] % 32]; if (i === 3) c += '-'; }
+    return c;
+  };
+  SS.normLic = function (raw) {
+    const x = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return x.length === 8 ? x.slice(0, 4) + '-' + x.slice(4) : '';
+  };
   SS.daysLeft = (endMs) => Math.max(0, Math.ceil((SS.dayEnd(endMs) - Date.now()) / 86400000));
   SS.monthStart = (y, m) => new Date(y, m, 1).getTime();
   SS.pad = (n, w) => String(n).padStart(w || 4, '0');

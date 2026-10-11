@@ -3,7 +3,8 @@
 <head>
 <!--
   ShopSathi — Super Admin (sirf Ankush ke liye)
-  v1.0.0 (2026-10-10): saari dukaanein, plan (free/paid + valid till), chalu/band, WhatsApp owner.
+  v1.0.0 (2026-10-10): saari dukaanein, plan, chalu/band, WhatsApp owner.
+  v1.1.0 (2026-10-11): free plan hataya; nayi dukaan approve (+30 din / +1 saal / Lifetime) ya mana; activation codes.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -27,7 +28,7 @@
 'use strict';
 const t = SS.t, esc = SS.esc, ic = SS.ic;
 const app = document.getElementById('app');
-const A = { shops: [], q: '', f: 'all' };
+const A = { shops: [], lics: [], q: '', f: 'all', tab: 'shops', lf: 'unused' };
 
 function boot() {
   if (!SS.configured()) { app.innerHTML = SS.notConfiguredHTML(); return; }
@@ -39,7 +40,7 @@ function renderAuth() {
   app.innerHTML = '<div class="authwrap"><div class="authhdr">' + SS.logo(80) + SS.wordmark(30) + '<b>Super Admin</b></div><main class="page"><form id="af" class="col">' +
     '<label class="f">' + t('mobile') + '<input class="inp" id="mb" type="tel" inputmode="numeric" maxlength="10"></label>' +
     '<label class="f">' + t('pin') + '<input class="inp" id="pn" type="password" inputmode="numeric" maxlength="6"></label><div id="aerr"></div>' +
-    '<button class="btn dark big">' + t('login') + '</button></form><div class="ver">ShopSathi Admin v' + SS.VERSION + '</div></main></div>';
+    '<button class="btn dark big">' + t('login') + '</button></form><div class="ver">ShopSathi Admin v' + SS.VERSION + '<br>© Ankush New Vision</div></main></div>';
   SS.$('#af').onsubmit = async (e) => {
     e.preventDefault();
     try { SS.busy(true); await SS.login(SS.$('#mb').value.trim(), SS.$('#pn').value.trim()); }
@@ -58,57 +59,119 @@ async function onLogin(u) {
 async function load() {
   try {
     SS.busy(true);
-    const q = await SS.db.collection('shops').get();
+    const [q, lq] = await Promise.all([SS.db.collection('shops').get(), SS.db.collection('licenses').get().catch(() => null)]);
     A.shops = SS.docs(q).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    A.lics = lq ? SS.docs(lq).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : [];
     draw();
   } catch (e) { app.innerHTML = '<main class="page"><div class="err">' + esc(SS.authErr(e)) + '<br>' + t('admin_rules_hint') + '</div><button class="btn dark big" id="lo">' + t('logout') + '</button></main>'; SS.$('#lo').onclick = () => SS.logout(); }
   finally { SS.busy(false); }
 }
+/* dukaan ki halat: pending / chalu / expired / band */
+function stateOf(s) {
+  if (s.plan === 'pending') return 'pending';
+  if (!s.active) return 'off';
+  return SS.shopOk(s) ? 'ok' : 'expired';
+}
 function draw() {
-  const now = SS.now();
   const q = A.q.toLowerCase();
-  const paidOk = (s) => s.plan === 'paid' && (!s.paidUntil || s.paidUntil >= now);
-  let list = A.shops.filter((s) => !q || (s.name || '').toLowerCase().indexOf(q) >= 0 || s.id.toLowerCase().indexOf(q) >= 0 || (s.mobile || '').indexOf(q) >= 0 || (s.city || '').toLowerCase().indexOf(q) >= 0);
-  if (A.f === 'paid') list = list.filter(paidOk);
-  if (A.f === 'free') list = list.filter((s) => s.plan !== 'paid');
-  if (A.f === 'expired') list = list.filter((s) => s.plan === 'paid' && s.paidUntil && s.paidUntil < now);
-  if (A.f === 'off') list = list.filter((s) => !s.active);
-  const tot = { shops: A.shops.length, paid: A.shops.filter(paidOk).length, cust: A.shops.reduce((a, s) => a + (s.customerCount || 0), 0), off: A.shops.filter((s) => !s.active).length };
-  const chip = (k, l) => '<button class="chip ' + (A.f === k ? 'on' : '') + '" data-f="' + k + '">' + l + '</button>';
+  const tabs = '<div class="seg"><button data-at="shops" class="' + (A.tab !== 'codes' ? 'on' : '') + '">' + t('a_shops') + '</button><button data-at="codes" class="' + (A.tab === 'codes' ? 'on' : '') + '">' + t('lic_codes') + '</button></div>';
+  const tot = { shops: A.shops.length, pend: A.shops.filter((s) => stateOf(s) === 'pending').length, ok: A.shops.filter((s) => stateOf(s) === 'ok').length, cust: A.shops.reduce((a, s) => a + (s.customerCount || 0), 0) };
+  let body = '';
+  if (A.tab === 'codes') body = codesHTML();
+  else {
+    let list = A.shops.filter((s) => !q || (s.name || '').toLowerCase().indexOf(q) >= 0 || s.id.toLowerCase().indexOf(q) >= 0 || (s.mobile || '').indexOf(q) >= 0 || (s.city || '').toLowerCase().indexOf(q) >= 0);
+    if (A.f !== 'all') list = list.filter((s) => stateOf(s) === A.f);
+    const chip = (k, l) => '<button class="chip ' + (A.f === k ? 'on' : '') + '" data-f="' + k + '">' + l + '</button>';
+    body = '<div class="search">' + ic('search', 20) + '<input class="inp" id="q" type="search" placeholder="' + t('a_search') + '" value="' + esc(A.q) + '"></div>' +
+      '<div class="chips">' + chip('all', t('all')) + chip('pending', t('a_pending') + (tot.pend ? ' (' + tot.pend + ')' : '')) + chip('ok', t('a_paid')) + chip('expired', t('a_expired')) + chip('off', t('a_off')) + '</div>' +
+      '<div class="list">' + (list.length ? list.map(card).join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div>';
+  }
   app.innerHTML = '<header class="mhdr"><div class="top">' + SS.logo(40) + '<div class="brand"><b><span>Shop</span>Sathi</b><small>Super Admin</small></div><button class="iconbtn" id="rf" aria-label="Refresh">' + ic('refresh') + '</button><button class="iconbtn" id="lo" aria-label="' + t('logout') + '">' + ic('logout') + '</button></div>' +
-    '<div class="stats"><div class="stat"><b>' + tot.shops + '</b><span>' + t('a_shops') + '</span></div><div class="stat"><b>' + tot.paid + '</b><span>' + t('a_paid') + '</span></div><div class="stat"><b>' + tot.cust + '</b><span>' + t('customers') + '</span></div><div class="stat"><b>' + tot.off + '</b><span>' + t('a_off') + '</span></div></div></header>' +
-    '<main class="page" style="padding-bottom:30px"><div class="search">' + ic('search', 20) + '<input class="inp" id="q" type="search" placeholder="' + t('a_search') + '" value="' + esc(A.q) + '"></div>' +
-    '<div class="chips">' + chip('all', t('all')) + chip('free', t('plan_free')) + chip('paid', t('plan_paid')) + chip('expired', t('a_expired')) + chip('off', t('a_off')) + '</div>' +
-    '<div class="list">' + (list.length ? list.map(card).join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div></main>';
+    '<div class="stats"><div class="stat"><b>' + tot.shops + '</b><span>' + t('a_shops') + '</span></div><button class="stat" data-f="pending" style="cursor:pointer"><b' + (tot.pend ? ' style="color:#9B2C2C"' : '') + '>' + tot.pend + '</b><span>' + t('a_pending') + '</span></button><div class="stat"><b>' + tot.ok + '</b><span>' + t('a_paid') + '</span></div><div class="stat"><b>' + tot.cust + '</b><span>' + t('customers') + '</span></div></div></header>' +
+    '<main class="page" style="padding-bottom:30px">' + tabs + body + '<div class="ver">ShopSathi Admin v' + SS.VERSION + ' · © Ankush New Vision</div></main>';
   SS.$('#lo').onclick = () => SS.logout();
   SS.$('#rf').onclick = load;
-  SS.$('#q').oninput = (e) => { A.q = e.target.value; draw(); const el = SS.$('#q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); };
-  SS.$$('[data-f]').forEach((b) => (b.onclick = () => { A.f = b.dataset.f; draw(); }));
+  const qi = SS.$('#q');
+  if (qi) qi.oninput = (e) => { A.q = e.target.value; draw(); const el = SS.$('#q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); };
+  SS.$$('[data-at]').forEach((b) => (b.onclick = () => { A.tab = b.dataset.at; draw(); }));
+  SS.$$('[data-f]').forEach((b) => (b.onclick = () => { A.tab = 'shops'; A.f = b.dataset.f; draw(); }));
   SS.$$('[data-act]').forEach((b) => (b.onclick = () => act(b.dataset.act, b.dataset.id)));
+  bindCodes();
 }
 function card(s) {
-  const now = SS.now();
-  const exp = s.plan === 'paid' && s.paidUntil && s.paidUntil < now;
-  return '<div class="card col"><div class="between"><div><b style="font-size:18px">' + esc(s.name) + '</b><div class="small muted">' + esc(s.id) + ' · ' + esc(t('type_' + (s.type || 'other'))) + ' · ' + esc(s.city || '') + '</div></div>' +
-    (s.active ? (s.plan === 'paid' ? '<span class="pill ' + (exp ? 'rej' : 'ok') + '">' + (exp ? t('a_expired') : t('plan_paid')) + '</span>' : '<span class="pill grey">' + t('plan_free') + '</span>') : '<span class="pill rej">' + t('a_off') + '</span>') + '</div>' +
+  const st = stateOf(s);
+  const pill = st === 'pending' ? '<span class="pill pend">' + t('a_pending') + '</span>' : st === 'ok' ? '<span class="pill ok">' + t('a_paid') + '</span>' : st === 'expired' ? '<span class="pill rej">' + t('a_expired') + '</span>' : '<span class="pill rej">' + t('a_off') + '</span>';
+  const b = (a, cls, l) => '<button class="btn ' + cls + ' sm" data-act="' + a + '" data-id="' + esc(s.id) + '">' + l + '</button>';
+  return '<div class="card col' + (st === 'pending' ? ' dupalert' : '') + '"><div class="between"><div><b style="font-size:18px">' + esc(s.name) + '</b><div class="small muted">' + esc(s.id) + ' · ' + esc(t('type_' + (s.type || 'other'))) + ' · ' + esc(s.city || '') + '</div></div>' + pill + '</div>' +
     '<div class="kv"><span>' + t('owner') + '</span><b>' + esc(s.ownerName || '') + ' · ' + esc(s.mobile || '') + '</b></div>' +
     '<div class="kv"><span>' + t('customers') + '</span><b>' + (s.customerCount || 0) + '</b></div>' +
-    (s.plan === 'paid' ? '<div class="kv"><span>' + t('valid_till') + '</span><b>' + SS.fmtDateFull(s.paidUntil) + '</b></div>' : '') +
+    (s.paidUntil ? '<div class="kv"><span>' + t('valid_till') + '</span><b>' + (s.paidUntil - SS.now() > 20 * 365 * 86400000 ? t('lic_lifetime') : SS.fmtDateFull(s.paidUntil)) + '</b></div>' : '') +
+    (s.licenseCode ? '<div class="kv"><span>' + t('lic_last') + '</span><b>' + esc(s.licenseCode) + '</b></div>' : '') +
     '<div class="kv"><span>' + t('a_created') + '</span><b>' + SS.fmtDateFull(s.createdAt) + '</b></div>' +
-    '<div class="btnrow"><button class="btn gold sm" data-act="p30" data-id="' + esc(s.id) + '">+30 ' + t('a_days') + '</button><button class="btn gold sm" data-act="p365" data-id="' + esc(s.id) + '">+1 ' + t('a_year') + '</button>' +
-    (s.plan === 'paid' ? '<button class="btn light sm" data-act="free" data-id="' + esc(s.id) + '">' + t('plan_free') + '</button>' : '') + '</div>' +
-    '<div class="btnrow"><button class="btn ' + (s.active ? 'danger' : 'ok') + ' sm" data-act="toggle" data-id="' + esc(s.id) + '">' + (s.active ? t('a_deactivate') : t('a_activate')) + '</button><a class="btn light sm" target="_blank" rel="noopener" href="' + SS.wa(s.mobile, 'ShopSathi — ' + (s.name || '')) + '">' + ic('wa', 18) + 'WhatsApp</a></div></div>';
+    (st === 'pending' ? '<div class="small" style="font-weight:600">' + t('a_approve_hint') + '</div>' : '') +
+    '<div class="btnrow">' + b('p30', 'gold', '+30 ' + t('a_days')) + b('p365', 'gold', '+1 ' + t('a_year')) + b('life', 'dark', t('lic_lifetime')) + '</div>' +
+    '<div class="btnrow">' + (st === 'pending' ? b('rejectshop', 'danger', t('a_reject_shop')) : b('toggle', s.active ? 'danger' : 'ok', s.active ? t('a_deactivate') : t('a_activate'))) +
+    '<a class="btn light sm" target="_blank" rel="noopener" href="' + SS.wa(s.mobile, 'ShopSathi — ' + (s.name || '')) + '">' + ic('wa', 18) + 'WhatsApp</a></div></div>';
 }
 async function act(a, id) {
   const s = A.shops.find((x) => x.id === id); if (!s) return;
   const ref = SS.db.collection('shops').doc(id);
   const now = SS.now();
   let upd = null;
-  if (a === 'p30' || a === 'p365') { const base = Math.max(now, s.plan === 'paid' ? s.paidUntil || 0 : 0); upd = { plan: 'paid', paidUntil: base + (a === 'p30' ? 30 : 365) * 86400000 }; }
-  if (a === 'free') { if (!(await SS.confirm(t('a_confirm_free'), t('plan_free')))) return; upd = { plan: 'free', paidUntil: 0 }; }
+  if (a === 'p30' || a === 'p365' || a === 'life') {
+    const days = a === 'p30' ? 30 : a === 'p365' ? 365 : SS.LIFETIME_DAYS;
+    const base = Math.max(now, Number(s.paidUntil) || 0);
+    upd = { plan: 'paid', paidUntil: base + days * 86400000 };
+    if (s.plan === 'pending' || s.plan === 'rejected' || s.plan === 'free') upd.active = true;
+    if (a === 'life' && !(await SS.confirm(t('a_confirm_life', { s: s.name }), t('lic_lifetime')))) return;
+  }
+  if (a === 'rejectshop') { if (!(await SS.confirm(t('a_confirm_reject_shop'), t('a_reject_shop'), true))) return; upd = { plan: 'rejected', active: false }; }
   if (a === 'toggle') { if (!(await SS.confirm(s.active ? t('a_confirm_off') : t('a_confirm_on'), s.active ? t('a_deactivate') : t('a_activate'), s.active))) return; upd = { active: !s.active }; }
   if (!upd) return;
   try { await SS.run(() => ref.update(upd), t('saved')); Object.assign(s, upd); draw(); } catch (e) {}
+}
+
+/* ---------------- Activation codes ---------------- */
+function licDaysLabel(d) { return d >= SS.LIFETIME_DAYS ? t('lic_lifetime') : d % 365 === 0 ? (d / 365) + ' ' + t('a_year') : d + ' ' + t('a_days'); }
+function licMsg(l) { return t('lic_share_msg', { c: l.id, d: licDaysLabel(l.days), u: (SS.CFG.baseUrl || '') + 'business/' }); }
+function codesHTML() {
+  const f = A.lf || 'unused';
+  const list = A.lics.filter((l) => f === 'all' || (f === 'used' ? l.used : !l.used));
+  const chip = (k, l) => '<button class="chip ' + (f === k ? 'on' : '') + '" data-lf="' + k + '">' + l + '</button>';
+  const opt = (v, l) => '<option value="' + v + '"' + (v === 365 ? ' selected' : '') + '>' + l + '</option>';
+  return '<div class="card col"><b>' + t('lic_new') + '</b>' +
+    '<label class="f">' + t('lic_valid') + '<select class="inp" id="ld">' + opt(30, '30 ' + t('a_days')) + opt(90, '90 ' + t('a_days')) + opt(180, '180 ' + t('a_days')) + opt(365, '1 ' + t('a_year')) + opt(SS.LIFETIME_DAYS, t('lic_lifetime')) + '</select></label>' +
+    '<label class="f">' + t('lic_count') + '<input class="inp" id="ln" type="number" inputmode="numeric" min="1" max="20" value="1"></label>' +
+    '<label class="f">' + t('lic_note') + ' <small>' + t('optional') + '</small><input class="inp" id="lnote" placeholder="' + t('lic_note_ph') + '"></label>' +
+    '<button class="btn gold big" id="lgen">' + ic('plus') + t('lic_make') + '</button></div>' +
+    '<div class="chips">' + chip('unused', t('lic_unused') + ' (' + A.lics.filter((l) => !l.used).length + ')') + chip('used', t('lic_usedf')) + chip('all', t('all')) + '</div>' +
+    '<div class="list">' + (list.length ? list.map((l) =>
+      '<div class="card col"><div class="between"><b style="font-size:22px;letter-spacing:2px;font-family:monospace">' + esc(l.id) + '</b>' + (l.used ? '<span class="pill grey">' + t('lic_usedf') + '</span>' : '<span class="pill ok">' + t('lic_unused') + '</span>') + '</div>' +
+      '<div class="kv"><span>' + t('lic_valid') + '</span><b>' + licDaysLabel(l.days) + '</b></div>' +
+      (l.note ? '<div class="kv"><span>' + t('lic_note') + '</span><b>' + esc(l.note) + '</b></div>' : '') +
+      (l.used ? '<div class="kv"><span>' + t('lic_used_by') + '</span><b>' + esc(l.usedByName || '') + ' · ' + esc(l.usedBy || '') + ' · ' + SS.fmtDate(l.usedAt) + '</b></div>' : '<div class="kv"><span>' + t('a_created') + '</span><b>' + SS.fmtDateFull(l.createdAt) + '</b></div>') +
+      (l.used ? '' : '<div class="btnrow"><button class="btn light sm" data-lcopy="' + esc(l.id) + '">' + ic('share', 18) + t('copy') + '</button><a class="btn gold sm" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(licMsg(l)) + '">' + ic('wa', 18) + 'WhatsApp</a><button class="btn danger sm" data-ldel="' + esc(l.id) + '" aria-label="' + t('delete') + '">' + ic('trash', 18) + '</button></div>') +
+      '</div>').join('') : '<div class="empty">' + t('no_data') + '</div>') + '</div>';
+}
+function bindCodes() {
+  SS.$$('[data-lf]').forEach((b) => (b.onclick = () => { A.lf = b.dataset.lf; draw(); }));
+  const gen = SS.$('#lgen');
+  if (gen) gen.onclick = async () => {
+    const days = Number(SS.$('#ld').value) || 365;
+    const n = Math.min(20, Math.max(1, Math.round(Number(SS.$('#ln').value) || 1)));
+    const note = SS.$('#lnote').value.trim();
+    const now = SS.now(), b = SS.db.batch(), made = [];
+    for (let i = 0; i < n; i++) { const c = SS.newLicCode(); made.push(c); b.set(SS.db.collection('licenses').doc(c), { days: days, used: false, note: note, createdAt: now + i, by: SS.CFG.adminMobile }); }
+    try { await SS.run(() => b.commit(), t('lic_made', { n: n })); A.lf = 'unused'; await load(); } catch (e) {}
+  };
+  SS.$$('[data-lcopy]').forEach((b) => (b.onclick = async () => {
+    const l = A.lics.find((x) => x.id === b.dataset.lcopy);
+    try { await navigator.clipboard.writeText(licMsg(l)); SS.toast(t('copied'), 'ok'); } catch (e) { SS.toast(l.id); }
+  }));
+  SS.$$('[data-ldel]').forEach((b) => (b.onclick = async () => {
+    if (!(await SS.confirm(t('lic_del_confirm', { c: b.dataset.ldel }), t('delete'), true))) return;
+    try { await SS.run(() => SS.db.collection('licenses').doc(b.dataset.ldel).delete(), t('done')); A.lics = A.lics.filter((x) => x.id !== b.dataset.ldel); draw(); } catch (e) {}
+  }));
 }
 boot();
 })();

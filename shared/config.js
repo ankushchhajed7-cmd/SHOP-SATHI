@@ -1,5 +1,5 @@
 /* ============================================================
-   ShopSathi v1.0.9 — CONFIG (sirf yahi file badalni hai)
+   ShopSathi v1.1.0 — CONFIG (sirf yahi file badalni hai)
    ------------------------------------------------------------
    1) Firebase Console > Project settings > General > Your apps
       > Web app (</>) > "SDK setup and configuration" > Config
@@ -26,8 +26,7 @@ window.SS_CONFIG = {
   // Paid plan payment ke liye UPI ID (khali chhod sakte hain)
   upiId: "",
 
-  planPrice: 199,   // ₹ per mahina
-  freeLimit: 50,    // free plan mein kitne customer (firestore.rules mein bhi 50 hai)
+  planPrice: 199,   // ₹ per mahina (free plan nahi hai — har nayi dukaan admin approve ya activation code se chalu)
 
   // GitHub Pages ka link (QR code isi se banta hai)
   baseUrl: "https://ankushchhajed7-cmd.github.io/SHOP-SATHI/"

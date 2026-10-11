@@ -1,4 +1,4 @@
-# ShopSathi v1.0.9 — har bill par reward points
+# ShopSathi v1.1.0 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -35,9 +35,9 @@ customer bill ki photo upload karta hai → dukaandar check karke approve karta 
 Repo → **Settings → Pages → Source: Deploy from a branch → `main` / `(root)` → Save.** 1–2 minute mein link chalu.
 
 ### 5. Shuru karein
-- **Dukaan:** Business app → *Nayi dukaan* → mobile + PIN → 5 step setup → dukaan ka QR milega (Aur → Dukaan ka QR → Print).
+- **Dukaan:** Business app → *Nayi dukaan* → mobile + PIN → 5 step setup → dukaan **"Approval baaki"** mein rahegi. Chalu karne ke 2 tareeke: (a) dukaandar activation code daale, ya (b) aap `/admin/` mein us dukaan par **+30 din / +1 saal / Lifetime** dabayein. Phir dukaan ka QR (Aur → Dukaan ka QR → Print).
 - **Customer:** QR scan kare (ya dukaan code daale) → Naya account → bill upload.
-- **Admin:** Customer app mein apne admin mobile se *Naya account* banayein, phir `/admin/` kholein — saari dukaanein, plan (+30 din / +1 saal), chalu/band.
+- **Admin:** Customer app mein apne admin mobile se *Naya account* banayein, phir `/admin/` kholein — saari dukaanein, approval (+30 din / +1 saal / Lifetime / Mana), chalu/band, **Activation codes** tab (code banayein → WhatsApp par bhejein).
 
 ### 6. APK (apk-factory se)
 `apk-factory` workflow mein URL daalein:
@@ -62,7 +62,7 @@ Repo → **Settings → Pages → Source: Deploy from a branch → `main` / `(ro
 
 ## Free limit aur kharcha
 - Firebase **Spark (free)**: 1 GB data, roz 50,000 reads / 20,000 writes. Ek bill photo ~100 KB → lagbhag 10,000 photos. Settlement ke baad **Settings → Purani photos download (ZIP) aur cloud khali** karein.
-- Free plan mein ek dukaan par **50 customers** (`config.js` ka `freeLimit` aur `firestore.rules` ka `50` — dono jagah same rakhein). Admin "+30 din" dabaye to unlimited.
+- **Free plan nahi hai.** Har nayi dukaan pehle "Approval baaki" — admin approve kare ya activation code se chalu ho. Plan ki tareekh nikal jaaye to naye bill / naye customer band (data safe), code ya renew se phir chalu. Customers ki koi limit nahi.
 
 ## Abhi ki seemayein (v1.0.0)
 - **PIN bhoolna:** Firebase Console → Authentication → us user ko delete karein → wo usi mobile se naya account banaye. Customer ka data mobile number par hai, isliye points safe rehte hain. *Dukaandar* ke liye admin ko Firestore mein `shops/<code>.ownerUid` aur `users/<naya uid>.ownShop` badalna padega.
@@ -81,12 +81,14 @@ shared/i18n.js        Hinglish / हिंदी / मराठी / English
 shared/theme.css      Silver Mirror + Gold theme
 icons/                logo 3B (customer) + biz-* (business, gunmetal + briefcase)
 firestore.rules       security rules
+LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 ```
 
 ## Data (Firestore)
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.1.0 (11 Oct 2026)** — free plan hataya; nayi dukaan admin ki manzoori ya **activation code** se hi chalu (Firebase rules mein pakka); Super Admin: Approve +30 din / +1 saal / Lifetime / Mana, Activation codes banana-bhejna; plan khatam hone se 7 din pehle chetavni; Settings mein "Naye customer ko pehle main approve karunga"; LICENSE file + © Ankush New Vision. **Update ke baad `firestore.rules` dobara Publish karein aur apni dukaan ko admin se Lifetime dein.**
 - **v1.0.9 (11 Oct 2026)** — duplicate chetavni ab Devanagari Hindi mein (Hinglish chuna ho tab bhi), laal/naarangi square border ke saath blink karti hai; "डुप्लिकेट?" nishaan bhi blink karta hai.
 - **v1.0.8 (11 Oct 2026)** — duplicate bill rok: customer wahi photo / wahi bill no. / same din + same amount dobara nahi bhej sakta; dukaandar ko duplicate par Approve ki jagah sirf "Duplicate — Reject" milta hai; pending list mein "Duplicate?" nishaan; approved bill ko malik cancel karke points wapas le sakta hai.
 - **v1.0.7 (11 Oct 2026)** — QR scanner mein "Gallery se QR photo upload karein" button (screenshot / WhatsApp wali QR photo se bhi dukaan judti hai); badi photo mein QR na mile to chhota karke dobara dhoondhta hai.

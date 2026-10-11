@@ -1,6 +1,8 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.0.9 — Firestore Security Rules
+// ShopSathi v1.1.0 — Firestore Security Rules
+// v1.1.0: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
+//         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
 // ZAROORI: neeche adminMobiles() mein apna (Super Admin) mobile number daalein
 // (shared/config.js ke adminMobile jaisa hi).
@@ -22,9 +24,28 @@ service cloud.firestore {
     function isStaff(shopId) { return signedIn() && request.auth.uid in shopData(shopId).staffUids; }
     function isManager(shopId) { return isOwner(shopId) || isStaff(shopId); }
     function isMe(mobile) { return signedIn() && myMobile() == mobile; }
-    function shopActive(shopId) { return shopData(shopId).active == true; }
+    function licDoc(code) { return /databases/$(database)/documents/licenses/$(code); }
+    // dukaan chalu = admin ne band nahi ki + plan ki tareekh baaki hai
+    function shopActive(shopId) {
+      return shopData(shopId).active == true && shopData(shopId).paidUntil > request.time.toMillis();
+    }
     function myMemberOk(shopId) {
-      return exists(memberDoc(shopId, myMobile())) && get(memberDoc(shopId, myMobile())).data.blocked == false;
+      return exists(memberDoc(shopId, myMobile()))
+        && get(memberDoc(shopId, myMobile())).data.blocked == false
+        && get(memberDoc(shopId, myMobile())).data.get('pending', false) == false;
+    }
+
+    // ---- activation codes (Super Admin banata hai, malik ek baar use karta hai) ----
+    match /licenses/{code} {
+      allow get: if signedIn();
+      allow list, create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (signedIn()
+            && resource.data.used == false
+            && request.resource.data.used == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt', 'usedByName'])
+            && get(shopDoc(request.resource.data.usedBy)).data.ownerUid == request.auth.uid
+            && getAfter(shopDoc(request.resource.data.usedBy)).data.licenseCode == code);
     }
 
     // ---- har user ka apna profile ----
@@ -39,9 +60,9 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.plan == 'free'
+        && request.resource.data.plan == 'pending'
         && request.resource.data.paidUntil == 0
-        && request.resource.data.active == true
+        && request.resource.data.active == false
         && request.resource.data.customerCount == 0
         && request.resource.data.nextCode == 1
         && request.resource.data.staffUids.size() == 0;
@@ -56,7 +77,7 @@ service cloud.firestore {
             (request.resource.data.nextCode == resource.data.nextCode + 1
               && request.resource.data.customerCount == resource.data.customerCount + 1
               && resource.data.active == true
-              && (resource.data.plan == 'paid' || resource.data.customerCount < 50)
+              && resource.data.paidUntil > request.time.toMillis()
               && (isManager(shopId) || joinMe))
             ||
             (request.resource.data.nextCode == resource.data.nextCode
@@ -65,19 +86,37 @@ service cloud.firestore {
           );
       }
 
+      // activation code se dukaan chalu / plan badhana (sirf malik, code ek hi baar)
+      function redeem() {
+        let lic = request.resource.data.licenseCode;
+        let days = get(licDoc(lic)).data.days;
+        return resource.data.ownerUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plan', 'paidUntil', 'active', 'licenseCode', 'licensedAt'])
+          && (resource.data.active == true || resource.data.plan == 'pending')
+          && request.resource.data.plan == 'paid'
+          && request.resource.data.active == true
+          && get(licDoc(lic)).data.used == false
+          && getAfter(licDoc(lic)).data.used == true
+          && getAfter(licDoc(lic)).data.usedBy == shopId
+          && (request.resource.data.paidUntil <= resource.data.paidUntil + days * 86400000
+              || request.resource.data.paidUntil <= request.time.toMillis() + days * 86400000 + 600000);
+      }
+
       allow update: if isAdmin()
         || (signedIn() && resource.data.ownerUid == request.auth.uid
             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
-                 ['ownerUid', 'plan', 'paidUntil', 'active', 'createdAt', 'customerCount', 'nextCode', 'shortCode']))
-        || (signedIn() && counterChange());
+                 ['ownerUid', 'plan', 'paidUntil', 'active', 'createdAt', 'customerCount', 'nextCode', 'shortCode', 'licenseCode', 'licensedAt']))
+        || (signedIn() && counterChange())
+        || (signedIn() && redeem());
 
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       // ---- customers (doc id = mobile) ----
       match /members/{mobile} {
         allow read: if isMe(mobile) || isManager(shopId) || isAdmin();
-        allow create: if isManager(shopId)
+        allow create: if (isManager(shopId) && shopActive(shopId))
           || (isMe(mobile) && shopActive(shopId)
+              && request.resource.data.get('pending', false) == shopData(shopId).get('approveJoin', false)
               && request.resource.data.uid == request.auth.uid
               && request.resource.data.points == shopData(shopId).welcomeBonus
               && request.resource.data.lifetimePoints == shopData(shopId).welcomeBonus
@@ -105,7 +144,7 @@ service cloud.firestore {
       match /bills/{billId} {
         allow read: if isManager(shopId) || isAdmin()
           || (signedIn() && resource.data.memberId == myMobile());
-        allow create: if isManager(shopId)
+        allow create: if (isManager(shopId) && shopActive(shopId))
           || (signedIn()
               && request.resource.data.memberId == myMobile()
               && request.resource.data.status == 'pending'
@@ -114,7 +153,9 @@ service cloud.firestore {
               && request.resource.data.amount > 0
               && shopActive(shopId)
               && myMemberOk(shopId));
-        allow update: if isManager(shopId);
+        allow update: if isManager(shopId)
+          && (shopActive(shopId)
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasPhoto', 'photoArchived']));
         allow delete: if isOwner(shopId)
           || (signedIn() && resource.data.memberId == myMobile());
       }
