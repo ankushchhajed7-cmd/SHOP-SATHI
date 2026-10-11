@@ -1,4 +1,4 @@
-# ShopSathi v1.0.5 — har bill par reward points
+# ShopSathi v1.0.6 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -87,6 +87,7 @@ firestore.rules       security rules
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.0.6 (11 Oct 2026)** — QR scanner: camera na khule to error ka kaaran dikhata hai, doosra camera try karta hai; khaali video ka play-icon hataya.
 - **v1.0.5 (11 Oct 2026)** — customer signup/profile se janamdin ka mahina hataya (dukaandar customer page par set kar sakta hai); naya QR scanner: Chrome ka built-in scanner + "photo khinch kar scan" (camera permission na ho to bhi).
 - **v1.0.4 (11 Oct 2026)** — setup Step 5 mein gift ki photo (optional); points ka % / niyam customer app, QR poster aur home par nahi dikhta; login error message saaf.
 - **v1.0.3 (11 Oct 2026)** — Business app ka alag icon: gunmetal background + sone ka briefcase badge (customer app silver hi rahega).

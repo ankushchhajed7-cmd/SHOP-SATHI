@@ -1,5 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
+   v1.0.6 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
    v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
@@ -10,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.0.5';
+  SS.VERSION = '1.0.6';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -266,7 +267,7 @@
   /* camera se QR scan. 1) BarcodeDetector + live camera  2) html5-qrcode  3) photo khinch kar scan */
   SS.scan = function (onText) {
     const m = SS.sheet(SS.t('scan_qr'),
-      '<div id="scanbox"><video id="scanvid" playsinline muted autoplay></video><div class="scanframe"></div></div>' +
+      '<div id="scanbox"><video id="scanvid" playsinline muted autoplay style="visibility:hidden"></video><div class="scanframe"></div></div>' +
       '<p class="small muted center" id="scanmsg" style="margin:0">' + SS.t('scan_hint') + '</p>' +
       '<input type="file" accept="image/*" capture="environment" id="scanfile" class="hidden">' +
       '<button class="btn light full" id="scanphoto">' + SS.ic('camera') + SS.t('scan_photo') + '</button>', { onClose: stop });
@@ -304,12 +305,15 @@
     };
     // live camera
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(SS.t('err_cam_perm'), true); return; }
+    const camErr = (er) => msg(SS.t('err_cam_perm') + ' [' + ((er && er.name) || 'error') + ']', true);
+    const getCam = () => navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .catch((er) => (er && (er.name === 'OverconstrainedError' || er.name === 'NotReadableError')) ? navigator.mediaDevices.getUserMedia({ video: true, audio: false }) : Promise.reject(er));
     if (det) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then((st) => {
+      getCam().then((st) => {
         if (done) { st.getTracks().forEach((tr) => tr.stop()); return; }
         stream = st;
         const v = el.querySelector('#scanvid');
-        v.srcObject = st; v.play().catch(() => {});
+        v.srcObject = st; v.style.visibility = 'visible'; v.play().catch(() => {});
         const tick = () => {
           if (done) return;
           if (v.readyState >= 2) {
@@ -317,12 +321,12 @@
           } else timer = setTimeout(tick, 200);
         };
         tick();
-      }).catch(() => msg(SS.t('err_cam_perm'), true));
+      }).catch(camErr);
     } else if (window.Html5Qrcode) {
       const box = el.querySelector('#scanbox');
       box.innerHTML = '<div id="scanh5"></div>';
       h5 = new Html5Qrcode('scanh5');
-      h5.start({ facingMode: 'environment' }, { fps: 10, qrbox: 200 }, (txt) => finish(txt), () => {}).catch(() => msg(SS.t('err_cam_perm'), true));
+      h5.start({ facingMode: 'environment' }, { fps: 10, qrbox: 200 }, (txt) => finish(txt), () => {}).catch(camErr);
     } else msg(SS.t('err_cam'), true);
   };
 
