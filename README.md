@@ -1,4 +1,4 @@
-# ShopSathi v1.1.0 — har bill par reward points
+# ShopSathi v1.1.1 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -7,7 +7,7 @@ customer bill ki photo upload karta hai → dukaandar check karke approve karta 
 |---|---|
 | Customer app | `https://ankushchhajed7-cmd.github.io/SHOP-SATHI/customer/` |
 | Business app (dukaandar + staff) | `https://ankushchhajed7-cmd.github.io/SHOP-SATHI/business/` |
-| Super Admin (sirf aap) | `https://ankushchhajed7-cmd.github.io/SHOP-SATHI/admin/` |
+| Super Admin (sirf aap, install ho sakta hai) | `https://ankushchhajed7-cmd.github.io/SHOP-SATHI/admin/` |
 | Landing page | `https://ankushchhajed7-cmd.github.io/SHOP-SATHI/` |
 
 ---
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.1.1 (11 Oct 2026)** — Super Admin ab install ho sakta hai (apna maroon + shield icon, "SS Admin").
 - **v1.1.0 (11 Oct 2026)** — free plan hataya; nayi dukaan admin ki manzoori ya **activation code** se hi chalu (Firebase rules mein pakka); Super Admin: Approve +30 din / +1 saal / Lifetime / Mana, Activation codes banana-bhejna; plan khatam hone se 7 din pehle chetavni; Settings mein "Naye customer ko pehle main approve karunga"; LICENSE file + © Ankush New Vision. **Update ke baad `firestore.rules` dobara Publish karein aur apni dukaan ko admin se Lifetime dein.**
 - **v1.0.9 (11 Oct 2026)** — duplicate chetavni ab Devanagari Hindi mein (Hinglish chuna ho tab bhi), laal/naarangi square border ke saath blink karti hai; "डुप्लिकेट?" nishaan bhi blink karta hai.
 - **v1.0.8 (11 Oct 2026)** — duplicate bill rok: customer wahi photo / wahi bill no. / same din + same amount dobara nahi bhej sakta; dukaandar ko duplicate par Approve ki jagah sirf "Duplicate — Reject" milta hai; pending list mein "Duplicate?" nishaan; approved bill ko malik cancel karke points wapas le sakta hai.

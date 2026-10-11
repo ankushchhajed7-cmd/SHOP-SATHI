@@ -1,7 +1,7 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.1.0 — Firestore Security Rules
-// v1.1.0: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
+// ShopSathi v1.1.1 — Firestore Security Rules
+// v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
 // ZAROORI: neeche adminMobiles() mein apna (Super Admin) mobile number daalein
