@@ -1,6 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
-   v1.1.1 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
+   v1.1.2 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
    v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.1.1';
+  SS.VERSION = '1.1.2';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
