@@ -1,5 +1,5 @@
 /* ============================================================
-   ShopSathi v1.0.8 — CONFIG (sirf yahi file badalni hai)
+   ShopSathi v1.0.9 — CONFIG (sirf yahi file badalni hai)
    ------------------------------------------------------------
    1) Firebase Console > Project settings > General > Your apps
       > Web app (</>) > "SDK setup and configuration" > Config

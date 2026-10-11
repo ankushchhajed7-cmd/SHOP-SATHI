@@ -1,4 +1,4 @@
-# ShopSathi v1.0.8 — har bill par reward points
+# ShopSathi v1.0.9 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -87,6 +87,7 @@ firestore.rules       security rules
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.0.9 (11 Oct 2026)** — duplicate chetavni ab Devanagari Hindi mein (Hinglish chuna ho tab bhi), laal/naarangi square border ke saath blink karti hai; "डुप्लिकेट?" nishaan bhi blink karta hai.
 - **v1.0.8 (11 Oct 2026)** — duplicate bill rok: customer wahi photo / wahi bill no. / same din + same amount dobara nahi bhej sakta; dukaandar ko duplicate par Approve ki jagah sirf "Duplicate — Reject" milta hai; pending list mein "Duplicate?" nishaan; approved bill ko malik cancel karke points wapas le sakta hai.
 - **v1.0.7 (11 Oct 2026)** — QR scanner mein "Gallery se QR photo upload karein" button (screenshot / WhatsApp wali QR photo se bhi dukaan judti hai); badi photo mein QR na mile to chhota karke dobara dhoondhta hai.
 - **v1.0.6 (11 Oct 2026)** — QR scanner: camera na khule to error ka kaaran dikhata hai, doosra camera try karta hai; khaali video ka play-icon hataya.
