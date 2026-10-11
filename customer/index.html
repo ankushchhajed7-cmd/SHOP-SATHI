@@ -582,7 +582,7 @@ function openUpload() {
     el.querySelector('#prev').innerHTML = !a ? '' : c.belowMin ? '<span style="color:#9B2C2C">' + t('below_min', { m: SS.fmtRs(sh.minBill) }) + '</span>' : t('approx_points', { p: SS.fmtPts(c.points) });
   };
   el.querySelector('#send').onclick = async () => {
-    const err = (msg) => (el.querySelector('#uerr').innerHTML = '<div class="err">' + esc(msg) + '</div>');
+    const err = (msg, cls) => (el.querySelector('#uerr').innerHTML = '<div class="err ' + (cls || '') + '">' + (cls ? '⚠️ ' : '') + esc(msg) + '</div>');
     const amount = SS.num(el.querySelector('#amt').value);
     const billDate = SS.fromIso(el.querySelector('#bd').value);
     const billNo = el.querySelector('#bn').value.trim().toUpperCase();
@@ -597,8 +597,8 @@ function openUpload() {
     // duplicate: wahi photo / wahi bill no. / same din + same amount — upload hi nahi hoga
     const nb = { memberId: S.mobile, photoHash: photoHash, billNo: billNo, billDate: billDate, amount: amount };
     const kinds = S.bills.map((b) => SS.dupKind(nb, b));
-    if (kinds.indexOf('photo') >= 0 || kinds.indexOf('billno') >= 0) return err(t('err_dup_own'));
-    if (kinds.indexOf('day') >= 0) return err(t('err_dup_day', { a: SS.fmtRs(amount), d: SS.fmtDate(billDate) }));
+    if (kinds.indexOf('photo') >= 0 || kinds.indexOf('billno') >= 0) return err(SS.tDev('err_dup_own'), 'dupalert');
+    if (kinds.indexOf('day') >= 0) return err(SS.tDev('err_dup_day', { a: SS.fmtRs(amount), d: SS.fmtDate(billDate) }), 'dupalert');
     const sref = SS.db.collection('shops').doc(S.cur);
     const bref = sref.collection('bills').doc();
     const now = SS.now();

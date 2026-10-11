@@ -494,4 +494,13 @@
     if (v) Object.keys(v).forEach((x) => { s = s.split('{' + x + '}').join(v[x]); });
     return s;
   };
+  /* duplicate jaisi zaroori chetavni: Hinglish chuna ho to bhi Devanagari Hindi mein */
+  SS.tDev = function (k, v) {
+    const l = cur === 'hing' ? 'hi' : cur;
+    let s = D[l][k];
+    if (s == null) s = D.hing[k];
+    if (s == null) s = k;
+    if (v) Object.keys(v).forEach((x) => { s = s.split('{' + x + '}').join(v[x]); });
+    return s;
+  };
 })();
