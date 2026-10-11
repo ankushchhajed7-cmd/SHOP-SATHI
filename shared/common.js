@@ -1,5 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
+   v1.0.3 (2026-10-11) — Business app ka alag icon
    v1.0.2 (2026-10-11) — PWA install fix (unique manifest id)
    v1.0.1 (2026-10-11) — Firebase project shopsathi-25794 config
    v1.0.0 (2026-10-10) — pehla release
@@ -7,7 +8,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.0.2';
+  SS.VERSION = '1.0.3';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
