@@ -434,7 +434,8 @@ function vHome() {
 /* ---------------- Bills ---------------- */
 function billItem(b, showStatus) {
   const m = B.memMap[b.memberId] || {};
-  const pill = !showStatus ? '<span class="pill pend">' + t('st_pending') + '</span>' : b.status === 'approved' ? '<span class="pill ok">' + t('st_approved') + '</span>' : b.status === 'rejected' ? '<span class="pill rej">' + t('st_rejected') + '</span>' : '<span class="pill pend">' + t('st_pending') + '</span>';
+  const dp = b.status !== 'rejected' && localDup(b) ? '<span class="pill rej">' + t('dup_pill') + '</span>' : '';
+  const pill = dp + (!showStatus ? '<span class="pill pend">' + t('st_pending') + '</span>' : b.status === 'approved' ? '<span class="pill ok">' + t('st_approved') + '</span>' : b.status === 'rejected' ? '<span class="pill rej">' + t('st_rejected') + '</span>' : '<span class="pill pend">' + t('st_pending') + '</span>');
   return '<button class="item" data-bill="' + b.id + '"><span class="ic">' + (b.thumb ? '<img alt="" src="' + b.thumb + '">' : ic('receipt', 20)) + '</span>' +
     '<span class="t"><b>' + SS.fmtRs(b.status === 'approved' ? b.finalAmount : b.amount) + ' · ' + esc(b.memberName || m.name || '') + '</b><span>' + esc(b.memberCode || '') + ' · ' + SS.fmtDate(b.billDate) + (b.status === 'approved' ? ' · +' + SS.fmtPts(b.points) : '') + '</span></span>' + pill + '</button>';
 }
@@ -481,26 +482,45 @@ async function openBill(id) {
   shopRef().collection('photos').doc(id).get().then((d) => { if (d.exists && d.data().data) { full = d.data().data; sheet.el.querySelector('#ph').innerHTML = '<img alt="Bill" src="' + full + '">'; } }).catch(() => {});
   sheet.el.querySelector('#ph').onclick = () => { if (full || b.thumb) SS.zoom(full || b.thumb); };
   sheet.el.querySelector('#gocust').onclick = () => { sheet.close(); open({ name: 'cust', id: b.memberId }); };
+  const dupBox = sheet.el.querySelector('#dups');
+  // approved bill: duplicate ho to batao + malik points wapas le sakta hai
+  if (b.status === 'approved') {
+    if (isOwner()) {
+      const rb = document.createElement('button');
+      rb.className = 'btn danger full'; rb.id = 'rev'; rb.innerHTML = ic('x') + t('rev_btn');
+      rb.onclick = () => { sheet.close(); askReverse(b); };
+      sheet.el.appendChild(rb);
+    }
+    findDups(b).then((d) => { if (d.hard.length) dupBox.innerHTML = '<div class="err">' + t('w_dup_approved') + '<br>' + d.hard.map(dupLine).join('<br>') + '</div>'; });
+  }
   if (!pend) return;
-  // duplicate check
-  (async () => {
-    const found = {};
-    try {
-      if (b.photoHash) (await shopRef().collection('bills').where('photoHash', '==', b.photoHash).limit(5).get()).docs.forEach((d) => { if (d.id !== b.id) found[d.id] = d.data(); });
-      if (b.billNo) (await shopRef().collection('bills').where('billNo', '==', b.billNo).limit(10).get()).docs.forEach((d) => { if (d.id !== b.id) found[d.id] = d.data(); });
-    } catch (e) {}
-    const ids = Object.keys(found);
-    if (ids.length) sheet.el.querySelector('#dups').innerHTML = '<div class="err">' + t('w_dup') + '<br>' + ids.map((k) => esc(found[k].memberCode) + ' · ' + SS.fmtRs(found[k].amount) + ' · ' + SS.fmtDate(found[k].billDate) + ' · ' + t('st_' + found[k].status)).join('<br>') + '</div>';
-  })();
+  const apr = sheet.el.querySelector('#apr');
+  apr.disabled = true; apr.innerHTML = t('dup_checking');
+  const dupP = findDups(b).then((d) => {
+    if (d.hard.length) {
+      // pakka duplicate — approve ka button hi nahi
+      dupBox.innerHTML = '<div class="err"><b>' + t('w_dup_block') + '</b><br>' + d.hard.map(dupLine).join('<br>') + '</div>';
+      apr.className = 'btn danger'; apr.disabled = false; apr.innerHTML = ic('x') + t('dup_reject');
+      apr.onclick = async () => { try { await doReject(b, t('rs_dup')); sheet.close(); } catch (e) {} };
+      const rj = sheet.el.querySelector('#rej'); if (rj) rj.remove();
+    } else {
+      if (d.soft.length) dupBox.innerHTML = '<div class="warn">' + t('w_dup_soft') + '<br>' + d.soft.map(dupLine).join('<br>') + '</div>';
+      apr.disabled = false; apr.innerHTML = ic('check') + t('approve');
+    }
+    return d;
+  });
   const fa = sheet.el.querySelector('#fa');
   const prev = () => {
     const c = SS.calcPoints(sh, SS.num(fa.value), m);
     sheet.el.querySelector('#pv').innerHTML = c.belowMin ? '<span style="color:#9B2C2C">' + t('below_min', { m: SS.fmtRs(sh.minBill) }) + ' — 0 pts</span>' : t('will_get', { p: SS.fmtPts(c.points) }) + (c.notes.length ? ' <span class="small">(' + esc(c.notes.join(', ')) + ')</span>' : '');
   };
   fa.oninput = prev; prev();
-  sheet.el.querySelector('#apr').onclick = async () => {
+  apr.onclick = async () => {
     const amt = SS.num(fa.value);
     if (!(amt > 0)) return SS.toast(t('err_amount'), 'err');
+    const d = await dupP;
+    if (d.hard.length) return SS.toast(t('err_dup_block'), 'err');
+    if (d.soft.length && !(await SS.confirm(t('confirm_dup_soft'), t('approve')))) return;
     try { await SS.run(() => creditBill({ billId: b.id, memberId: b.memberId, finalAmount: amt }), t('approved_ok')); sheet.close(); loadMonthStats(); }
     catch (e) {}
   };
@@ -513,19 +533,82 @@ function askReject(b) {
   s.el.querySelector('#go').onclick = async () => {
     const reason = s.el.querySelector('#rr').value.trim() || sel;
     if (!reason) return SS.toast(t('err_reason'), 'err');
-    try {
-      await SS.run(async () => {
-        const sref = shopRef(), bref = sref.collection('bills').doc(b.id);
-        await SS.db.runTransaction(async (tx) => {
-          const cur = await tx.get(bref);
-          if (!cur.exists || cur.data().status !== 'pending') throw new Error(t('err_already'));
-          tx.update(bref, { status: 'rejected', reason: reason, approvedBy: B.user.uid, approvedByName: whoAmI(), approvedAt: SS.now() });
-          tx.set(sref.collection('members').doc(b.memberId).collection('notifs').doc(), { kind: 'rejected', amount: b.amount, reason: reason, at: SS.now(), read: false });
-        });
-      }, t('rejected_ok'));
-      s.close();
-    } catch (e) {}
+    try { await doReject(b, reason); s.close(); } catch (e) {}
   };
+}
+function doReject(b, reason) {
+  return SS.run(async () => {
+    const sref = shopRef(), bref = sref.collection('bills').doc(b.id);
+    await SS.db.runTransaction(async (tx) => {
+      const cur = await tx.get(bref);
+      if (!cur.exists || cur.data().status !== 'pending') throw new Error(t('err_already'));
+      tx.update(bref, { status: 'rejected', reason: reason, approvedBy: B.user.uid, approvedByName: whoAmI(), approvedAt: SS.now() });
+      tx.set(sref.collection('members').doc(b.memberId).collection('notifs').doc(), { kind: 'rejected', amount: b.amount, reason: reason, at: SS.now(), read: false });
+    });
+  }, t('rejected_ok'));
+}
+
+/* ---------------- Duplicate bill check ----------------
+   wahi photo / wahi bill no. / same customer + same din + same amount.
+   hard = pakka duplicate (approve nahi hoga), soft = bill no. alag hai, malik khud dekhe. */
+async function findDups(b) {
+  const col = shopRef().collection('bills'), found = {};
+  const add = (q) => q.docs.forEach((d) => { if (d.id !== b.id) found[d.id] = Object.assign({ id: d.id }, d.data()); });
+  const jobs = [];
+  if (b.photoHash) jobs.push(col.where('photoHash', '==', b.photoHash).limit(10).get().then(add));
+  if (b.billNo) jobs.push(col.where('billNo', '==', b.billNo).limit(10).get().then(add));
+  if (b.memberId && b.billDate) jobs.push(col.where('memberId', '==', b.memberId).where('billDate', '==', b.billDate).limit(30).get().then(add));
+  await Promise.all(jobs.map((p) => p.catch((e) => console.warn('dup', e))));
+  B.pending.concat(B.recent || [], B.custBills || []).forEach((o) => { if (o.id !== b.id && !found[o.id]) found[o.id] = o; });
+  const res = { hard: [], soft: [] };
+  Object.values(found).forEach((o) => {
+    const k = SS.dupKind(b, o);
+    if (!k || !SS.dupBefore(o, b)) return;
+    (SS.dupHard(k) ? res.hard : res.soft).push(Object.assign({ _k: k }, o));
+  });
+  return res;
+}
+function localDup(b) {
+  // pending par har shak dikhao; approved par sirf pakka duplicate
+  return B.pending.concat(B.recent || []).some((o) => {
+    if (o.id === b.id || !SS.dupBefore(o, b)) return false;
+    const k = SS.dupKind(b, o);
+    return b.status === 'pending' ? !!k : SS.dupHard(k);
+  });
+}
+function dupLine(o) {
+  return '• ' + esc(t('dupk_' + o._k)) + ': ' + esc(o.memberCode || '') + ' · ' + SS.fmtRs(o.status === 'approved' ? o.finalAmount : o.amount) + ' · ' + SS.fmtDate(o.billDate) + (o.billNo ? ' · #' + esc(o.billNo) : '') + ' · ' + t('st_' + o.status);
+}
+
+/* ---------------- Approved bill cancel — points wapas (sirf malik) ---------------- */
+function askReverse(b) {
+  const s = SS.sheet(t('rev_title'),
+    '<div class="warn">' + t('rev_info', { a: SS.fmtRs(b.finalAmount), p: SS.fmtPts(b.points) }) + '</div>' +
+    '<label class="f">' + t('reason') + '<input class="inp" id="rr" value="' + esc(t('rs_dup')) + '"></label>' +
+    '<button class="btn danger big" id="go">' + ic('x') + t('rev_btn') + '</button>');
+  s.el.querySelector('#go').onclick = async () => {
+    const reason = s.el.querySelector('#rr').value.trim() || t('rs_dup');
+    try { await reverseBill(b, reason); s.close(); if (B.view && B.view.name === 'cust') loadCust(b.memberId); loadMonthStats(); if (B.recent) loadRecent(); } catch (e) {}
+  };
+}
+function reverseBill(b, reason) {
+  return SS.run(async () => {
+    const sref = shopRef(), bref = sref.collection('bills').doc(b.id), mref = sref.collection('members').doc(b.memberId);
+    await SS.db.runTransaction(async (tx) => {
+      const cb = await tx.get(bref), m = await tx.get(mref);
+      if (!cb.exists || cb.data().status !== 'approved') throw new Error(t('err_already'));
+      const bd = cb.data(), now = SS.now();
+      const pts = Number(bd.points) || 0, amt = Number(bd.finalAmount) || 0;
+      tx.update(bref, { status: 'rejected', reason: reason, reversed: true, reversedPoints: pts, reversedAt: now, reversedBy: B.user.uid, reversedByName: whoAmI() });
+      if (m.exists) {
+        const md = m.data();
+        const spend = Math.max(0, (Number(md.totalSpend) || 0) - amt);
+        tx.update(mref, { points: SS.FV.increment(-pts), lifetimePoints: SS.FV.increment(-pts), totalSpend: SS.FV.increment(-amt), billCount: SS.FV.increment(-1), level: SS.levelFor(B.shop, spend) });
+        tx.set(sref.collection('ledger').doc(), { memberId: b.memberId, type: 'reversal', points: -pts, billId: b.id, amount: amt, note: SS.fmtRs(amt) + ' · ' + reason, at: now });
+        tx.set(mref.collection('notifs').doc(), { kind: 'reversed', amount: amt, points: pts, reason: reason, at: now, read: false });
+      }
+    });
+  }, t('rev_ok'));
 }
 function whoAmI() { return B.role === 'owner' ? B.shop.ownerName : ((B.shop.staff && B.shop.staff[B.user.uid] && B.shop.staff[B.user.uid].name) || B.profile.name || B.mobile); }
 
@@ -693,8 +776,11 @@ function addBill(memberId) {
     if (!(amt > 0)) return SS.toast(t('err_amount'), 'err');
     const billNo = s.el.querySelector('#bn').value.trim().toUpperCase();
     const photoHash = photo ? await SS.hash(photo) : '';
+    const billDate = SS.fromIso(s.el.querySelector('#bd').value) || SS.now();
+    const d = await findDups({ id: '_new', memberId, photoHash, billNo, billDate, amount: amt, status: 'pending', uploadedAt: SS.now() });
+    if ((d.hard.length || d.soft.length) && !(await SS.confirm(t('confirm_dup_manual') + '\n' + d.hard.concat(d.soft).map((o) => SS.fmtRs(o.finalAmount || o.amount) + ' · ' + SS.fmtDate(o.billDate) + ' · ' + t('st_' + o.status)).join(', '), t('yes'), true))) return;
     try {
-      await SS.run(() => creditBill({ memberId, finalAmount: amt, billNo, billDate: SS.fromIso(s.el.querySelector('#bd').value) || SS.now(), photo, thumb, photoHash }), t('approved_ok'));
+      await SS.run(() => creditBill({ memberId, finalAmount: amt, billNo, billDate, photo, thumb, photoHash }), t('approved_ok'));
       s.close(); loadCust(memberId); loadMonthStats();
     } catch (e) {}
   };
@@ -854,7 +940,7 @@ async function loadReport(month) {
     const data = {
       approved: ok.length, rejected: rej.length, uploaded: up.size,
       sales: ok.reduce((a, b) => a + (b.finalAmount || 0), 0),
-      pointsGiven: led.filter((l) => l.points > 0).reduce((a, l) => a + l.points, 0),
+      pointsGiven: led.filter((l) => l.points > 0 || l.type === 'reversal').reduce((a, l) => a + l.points, 0),
       giftsGiven: led.filter((l) => l.type === 'gift').length,
       newCust: B.members.filter((m) => m.joinedAt >= s && m.joinedAt < e).length,
       top: Object.values(per).sort((a, b) => b.sales - a.sales).slice(0, 10)
