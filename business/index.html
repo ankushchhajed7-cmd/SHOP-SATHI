@@ -343,7 +343,12 @@ function start() {
     B.pending = list; render();
   }, onErr));
   B.unsub.push(sref.collection('gifts').onSnapshot((q) => { B.gifts = SS.docs(q).sort((a, b) => a.points - b.points); render(); }, onErr));
-  B.unsub.push(sref.collection('redemptions').where('status', '==', 'requested').onSnapshot((q) => { B.reds = SS.docs(q).sort((a, b) => a.at - b.at); render(); }, onErr));
+  B.unsub.push(sref.collection('redemptions').where('status', '==', 'requested').onSnapshot((q) => {
+    const list = SS.docs(q).sort((a, b) => a.at - b.at);
+    if (B.seenReds) { const fresh = list.filter((r) => !B.seenReds.has(r.id)); if (fresh.length) SS.notify(t('n_new_gift_t'), t('n_new_gift_b', { c: fresh[0].memberName || fresh[0].memberCode, g: fresh[0].giftName })); }
+    B.seenReds = new Set(list.map((r) => r.id));
+    B.reds = list; render();
+  }, onErr));
   loadMonthStats();
   render();
 }
@@ -702,6 +707,9 @@ async function creditBill(o) {
     upd.points = SS.FV.increment(add);
     upd.lifetimePoints = SS.FV.increment(add);
     tx.update(mref, upd);
+    // gift level paar hua? customer ko badhai
+    const oldP = Number(md.points) || 0, lv0 = SS.levelState(B.gifts, oldP).cur, lv1 = SS.levelState(B.gifts, oldP + add);
+    if (lv1.cur && (!lv0 || lv1.cur.no > lv0.no)) tx.set(mref.collection('notifs').doc(), { kind: 'level_up', level: lv1.cur.no, next: lv1.next ? lv1.next.no : 0, at: now, read: false });
   });
 }
 
@@ -874,7 +882,7 @@ function vGifts() {
   h += B.reds.length ? B.reds.map((r) => {
     const m = B.memMap[r.memberId] || {};
     const low = (m.points || 0) < r.points;
-    return '<div class="card col"><div class="between"><b style="font-size:17px">' + esc(r.giftName) + '</b><span class="pill gold">' + SS.fmtPts(r.points) + ' pts</span></div>' +
+    return '<div class="card col"><div class="between"><b style="font-size:17px">' + esc(r.giftName) + '</b><span class="pill gold">' + (r.level ? t('level') + ' ' + r.level + ' · ' : '') + SS.fmtPts(r.points) + ' pts</span></div>' +
       '<div class="small muted">' + esc(r.memberName || m.name || '') + ' · ' + esc(r.memberCode || '') + ' · ' + t('has_points', { p: SS.fmtPts(m.points || 0) }) + ' · ' + SS.fmtDate(r.at) + '</div>' +
       (low ? '<div class="err">' + t('w_low_points') + '</div>' : '') +
       '<div class="btnrow"><button class="btn danger sm" data-rcancel="' + r.id + '">' + ic('x', 18) + t('cancel') + '</button><button class="btn ok sm" data-rgive="' + r.id + '"' + (low ? ' disabled' : '') + '>' + ic('check', 18) + t('gift_given') + '</button></div></div>';
@@ -936,9 +944,10 @@ function cancelGift(id) {
     const sref = shopRef();
     try {
       await SS.run(async () => {
+        // request hatao — customer is scheme mein ek baar phir chun sakta hai
         const b = SS.db.batch();
-        b.update(sref.collection('redemptions').doc(id), { status: 'rejected', reason, closedAt: SS.now() });
-        b.set(sref.collection('members').doc(r.memberId).collection('notifs').doc(), { kind: 'gift_cancel', gift: r.giftName, reason, at: SS.now(), read: false });
+        b.delete(sref.collection('redemptions').doc(id));
+        b.set(sref.collection('members').doc(r.memberId).collection('notifs').doc(), { kind: 'gift_cancel', gift: r.giftName, reason, again: true, at: SS.now(), read: false });
         await b.commit();
       }, t('done'));
       s.close();

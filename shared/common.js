@@ -1,6 +1,6 @@
 /* ============================================================
    ShopSathi — shared helpers (business + customer + admin)
-   v1.1.2 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
+   v1.2.0 (2026-10-11) — scanner: camera error ka naam dikhe, dusra camera try, play-icon hataya
    v1.0.5 (2026-10-11) — naya QR scanner (BarcodeDetector + photo se scan), janamdin customer se nahi
    v1.0.4 (2026-10-11) — gift photo setup mein; points % chhupa
    v1.0.3 (2026-10-11) — Business app ka alag icon
@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.1.2';
+  SS.VERSION = '1.2.0';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -147,6 +147,27 @@
       ? SS.t('rule_fixed', { r: shop.rupeesPerPoint })
       : SS.t('rule_pct', { p: shop.percent });
   };
+  /* ---------------- Gift levels ----------------
+     Gifts ke points se level: sabse kam points = Level 1. Same points wale gifts = ek hi level (inmein se koi ek). */
+  SS.giftLevels = function (gifts) {
+    const list = (gifts || []).filter((g) => g.active !== false && Number(g.points) > 0);
+    const pts = Array.from(new Set(list.map((g) => Number(g.points)))).sort((a, b) => a - b);
+    return pts.map((p, i) => ({ no: i + 1, points: p, gifts: list.filter((g) => Number(g.points) === p) }));
+  };
+  SS.levelState = function (gifts, points) {
+    const levels = SS.giftLevels(gifts), pts = Number(points) || 0;
+    let cur = null, next = null;
+    for (const l of levels) { if (pts + 1e-9 >= l.points) cur = l; else { next = l; break; } }
+    return { levels, cur, next };
+  };
+  /* gift chunne ka samay: scheme khatam hone ke agle din se settlement ki aakhri tareekh tak */
+  SS.claimWindow = function (shop) {
+    const open = SS.dayEnd(shop.schemeEnd) + 1;
+    const close = SS.dayEnd(shop.settlementDate || shop.schemeEnd);
+    const now = SS.now();
+    return { open, close, state: now < open ? 'before' : now > close ? 'after' : 'open' };
+  };
+  SS.claimId = (mobile, shop) => mobile + '_s' + ((shop && shop.schemeNo) || 1);
   SS.nextGift = function (gifts, points) {
     const list = (gifts || []).filter((g) => g.active !== false).sort((a, b) => a.points - b.points);
     const next = list.find((g) => g.points > points) || null;

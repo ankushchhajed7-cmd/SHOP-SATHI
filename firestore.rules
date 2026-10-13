@@ -1,6 +1,6 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.1.2 — Firestore Security Rules
+// ShopSathi v1.2.0 — Firestore Security Rules
 // v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
@@ -186,20 +186,21 @@ service cloud.firestore {
       }
 
       // ---- gift requests ----
+      // v1.2.0: ek scheme mein ek hi baar (doc id = <mobile>_s<schemeNo>), sirf scheme khatam hone ke
+      // agle din se settlement ki aakhri tareekh tak; customer cancel nahi kar sakta (dukaandar cancel kare to phir mauka)
       match /redemptions/{rid} {
         allow read: if isManager(shopId)
           || (signedIn() && resource.data.memberId == myMobile());
         allow create: if signedIn()
+          && rid == myMobile() + '_s' + string(shopData(shopId).get('schemeNo', 1))
           && request.resource.data.memberId == myMobile()
           && request.resource.data.status == 'requested'
+          && request.time.toMillis() >= shopData(shopId).schemeEnd + 86400000
+          && request.time.toMillis() < shopData(shopId).settlementDate + 86400000
           && myMemberOk(shopId);
-        allow update: if isManager(shopId)
-          || (signedIn() && resource.data.memberId == myMobile()
-              && resource.data.status == 'requested'
-              && request.resource.data.status == 'cancelled'
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt']));
-        allow delete: if isOwner(shopId)
-          || (signedIn() && resource.data.memberId == myMobile());
+        allow update: if isManager(shopId);
+        allow delete: if isManager(shopId)
+          || (signedIn() && resource.data.memberId == myMobile() && !exists(memberDoc(shopId, myMobile())));
       }
 
       // ---- points ledger (hisaab) ----
