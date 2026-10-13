@@ -1,5 +1,5 @@
-/* ShopSathi admin service worker — v1.1.2 (network-first, offline cache) */
-const CACHE = 'ss-admin-v1.1.2';
+/* ShopSathi admin service worker — v1.2.0 (network-first, offline cache) */
+const CACHE = 'ss-admin-v1.2.0';
 const CORE = ['./', './index.html', './manifest.json', '../shared/theme.css', '../shared/config.js', '../shared/i18n.js', '../shared/common.js', '../icons/admin-192.png', '../icons/admin-512.png'];
 const CDN = /^https:\/\/(www\.gstatic\.com\/firebasejs|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

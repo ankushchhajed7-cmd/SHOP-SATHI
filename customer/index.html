@@ -286,6 +286,10 @@ function schemeState() {
   if (now > SS.dayEnd(sh.schemeEnd)) return 'after';
   return 'on';
 }
+function curScheme() { return (S.shop && S.shop.schemeNo) || 1; }
+/* is scheme ka gift (maanga hua ya mil chuka) — sirf ek baar */
+function activeClaim() { return S.reds.find((r) => (r.schemeNo || 1) === curScheme() && (r.status === 'requested' || r.status === 'given')) || null; }
+function daysUntil(ms) { return Math.max(0, Math.ceil((SS.dayStart(ms) - SS.dayStart(SS.now())) / 86400000)); }
 function billRow(b) {
   const st = b.status;
   const pill = b._local ? '<span class="pill grey">' + t('st_queued') + '</span>'
@@ -303,10 +307,15 @@ function billRow(b) {
 function drawHome() {
   const sh = S.shop, m = S.member;
   const pts = Number(m.points) || 0;
-  const ng = SS.nextGift(S.gifts, pts);
-  const pct = ng.next ? Math.min(100, (pts / ng.next.points) * 100) : (S.gifts.length ? 100 : 0);
-  const gline = ng.next ? t('next_gift', { g: esc(ng.next.name), p: ng.next.points, n: SS.fmtPts(ng.next.points - pts) })
-    : S.gifts.length ? t('all_gifts_reach') : t('no_gifts_yet');
+  const L = SS.levelState(S.gifts, pts);
+  const gname = (l) => esc(l.gifts.map((g) => g.name).join(' / '));
+  let pct = 0, gline = t('no_gifts_yet');
+  if (L.next) {
+    pct = Math.min(100, (pts / L.next.points) * 100);
+    gline = '<div class="lvlhero">' + (L.cur ? '<b>' + t('glvl_done', { l: L.cur.no }) + '</b>' : '') +
+      '<span>' + (L.cur ? t('glvl_next', { l: L.next.no, p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })
+        : t('glvl_need', { l: L.next.no, g: gname(L.next), p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })) + '</span></div>';
+  } else if (L.cur) { pct = 100; gline = '<div class="lvlhero"><b>' + t('glvl_all') + '</b></div>'; }
   const ss = schemeState();
   const days = SS.daysLeft(sh.schemeEnd);
   const month = new Date().getMonth() + 1;
@@ -318,9 +327,10 @@ function drawHome() {
   if (ss === 'after') notes += '<div class="warn">' + t('scheme_after', { d: SS.fmtDateFull(sh.settlementDate) }) + '</div>';
   if (sh.festival2x) notes += '<div class="okbox">' + ic('star', 18) + ' ' + t('festival_on') + '</div>';
   if (sh.birthdayDouble && Number(m.dobMonth) === month) notes += '<div class="okbox">' + ic('gift', 18) + ' ' + t('birthday_on') + '</div>';
-  const open = S.reds.filter((r) => r.status === 'requested');
-  if (open.length) notes += '<div class="warn">' + t('gift_req_open', { g: esc(open.map((r) => r.giftName).join(', ')) }) + '</div>';
-  else if (ng.best && !m.blocked) notes += '<button class="okbox" data-tab="gifts" style="border:none;text-align:left;cursor:pointer;font:inherit;font-weight:600">' + ic('gift', 18) + ' ' + t('can_get_cust', { g: esc(ng.best.name) }) + '</button>';
+  const W = SS.claimWindow(sh), mine = activeClaim();
+  if (mine) notes += '<button class="okbox" data-tab="gifts" style="border:none;text-align:left;cursor:pointer;font:inherit;font-weight:600">' + ic('gift', 18) + ' ' + (mine.status === 'given' ? t('claim_given', { g: esc(mine.giftName) }) : t('claim_done', { g: esc(mine.giftName) })) + '</button>';
+  else if (W.state === 'open' && L.cur && !m.blocked) notes += '<button class="okbox dupalert" data-tab="gifts" style="text-align:left;cursor:pointer;font:inherit;font-weight:700;width:100%">' + ic('gift', 18) + ' ' + t('claim_open') + '</button>';
+  else if (W.state === 'before' && L.levels.length) notes += '<div class="small muted center">🗓️ ' + t('claim_days', { n: daysUntil(W.open), d: SS.fmtDateFull(W.open) }) + '</div>';
   const canUp = SS.shopOk(sh) && !m.blocked && !m.pending && ss === 'on';
   return '<header class="mhdr">' + topRow() +
     '<div class="hello">' + t('namaste') + ', ' + esc((m.name || S.profile.name || '').split(' ')[0]) + '</div>' +
@@ -337,6 +347,7 @@ function drawHome() {
 }
 function bindHome() {
   const up = SS.$('#up'); if (up) up.onclick = openUpload;
+  maybeLevelPopup();
   SS.$('#all').onclick = () => { S.tab = 'bills'; draw(); window.scrollTo(0, 0); };
 }
 
@@ -351,52 +362,88 @@ function drawBills() {
 function bindBills() { SS.$$('[data-f]').forEach((b) => (b.onclick = () => { S.billFilter = b.dataset.f; draw(); })); }
 
 function drawGifts() {
-  const pts = Number(S.member.points) || 0;
-  const avail = pts - openReqPoints();
-  const settleOk = SS.now() <= SS.dayEnd(S.shop.settlementDate || S.shop.schemeEnd);
-  const open = S.reds.filter((r) => r.status === 'requested');
+  const sh = S.shop, m = S.member, pts = Number(m.points) || 0;
+  const L = SS.levelState(S.gifts, pts), W = SS.claimWindow(sh), mine = activeClaim();
   let h = miniHeader(t('gift_list')) + '<main class="page">' +
     '<div class="card between"><div><div class="small muted">' + t('reward_points') + '</div><b style="font-size:28px">' + SS.fmtPts(pts) + '</b></div>' +
-    (open.length ? '<div class="small muted" style="text-align:right">' + t('available') + '<br><b style="font-size:18px;color:#1F2226">' + SS.fmtPts(avail) + '</b></div>' : '') + '</div>';
-  if (open.length) {
-    h += '<div class="sec-title"><span>' + t('my_requests') + '</span></div><div class="list">' + open.map((r) =>
-      '<div class="item" style="cursor:default"><span class="ic">' + ic('gift', 20) + '</span><span class="t"><b>' + esc(r.giftName) + '</b><span>' + SS.fmtPts(r.points) + ' pts · ' + SS.fmtDate(r.at) + '</span></span><button class="btn danger sm" data-cancel="' + r.id + '">' + t('cancel') + '</button></div>').join('') + '</div>';
-  }
-  if (!settleOk) h += '<div class="warn">' + t('gift_closed') + '</div>';
-  h += '<div class="sec-title"><span>' + t('all_gifts') + '</span></div>';
-  if (!S.gifts.length) h += '<div class="empty">' + t('no_gifts_yet') + '</div>';
-  else h += '<div class="gifts">' + S.gifts.map((g) => {
-    const reach = pts >= g.points;
-    const out = g.stock === 0;
-    const can = reach && avail >= g.points && settleOk && !out && !S.member.blocked && !S.member.pending;
-    const p = Math.min(100, (pts / g.points) * 100);
-    return '<div class="gift">' + (reach ? '<span class="tick" aria-label="' + t('reachable') + '">' + ic('check', 18) + '</span>' : '') +
-      '<div class="gimg">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 48)) + '</div>' +
-      '<div class="gb"><b>' + esc(g.name) + '</b><span class="gp">' + SS.fmtPts(g.points) + ' pts</span>' +
-      (out ? '<span class="pill rej" style="align-self:flex-start">' + t('out_of_stock') + '</span>'
-        : reach ? (can ? '<button class="btn gold sm" data-req="' + g.id + '">' + t('request_gift') + '</button>' : '')
-        : '<div class="bar light"><i style="width:' + p + '%"></i></div><span class="small muted">' + t('need_more', { n: SS.fmtPts(g.points - pts) }) + '</span>') +
-      '</div></div>';
-  }).join('') + '</div>';
+    (L.cur ? '<span class="pill ok">' + t('glvl_your', { l: L.cur.no }) + '</span>' : '') + '</div>';
+  if (mine) h += '<div class="okbox">' + ic('check', 18) + ' ' + (mine.status === 'given' ? t('claim_given', { g: esc(mine.giftName) }) : t('claim_done', { g: esc(mine.giftName) })) + '</div>';
+  else if (W.state === 'before') h += '<div class="warn">🗓️ ' + t('claim_opens', { d: SS.fmtDateFull(W.open) }) + '</div>';
+  else if (W.state === 'open') h += L.cur ? '<div class="okbox dupalert" style="font-weight:700">' + ic('gift', 18) + ' ' + t('claim_open') + '</div>' : '<div class="warn">' + t('claim_open_none') + '</div>';
+  else h += '<div class="warn">' + t('gift_closed') + '</div>';
+  if (!L.levels.length) h += '<div class="empty">' + t('no_gifts_yet') + '</div>';
+  L.levels.forEach((l) => {
+    const st = !L.cur || l.no > L.cur.no ? 'future' : l.no < L.cur.no ? 'passed' : 'cur';
+    const right = st === 'passed' ? '<span class="pill grey">' + t('glvl_passed') + '</span>'
+      : st === 'cur' ? '<span class="pill ok">' + t('glvl_cur') + '</span>'
+      : '<span class="small muted">' + t('need_more', { n: SS.fmtPts(l.points - pts) }) + '</span>';
+    h += '<div class="lvlbox ' + st + '"><div class="lh"><span>🎁 ' + t('glvl_head', { l: l.no, p: SS.fmtPts(l.points) }) + '</span>' + right + '</div>' +
+      (l.gifts.length > 1 ? '<div class="pick1">⚠️ ' + SS.tDev('glvl_pick_one') + '</div>' : '') +
+      '<div class="grow-items col" style="gap:8px">' + l.gifts.map((g) =>
+        '<button class="gitem' + (mine && mine.giftId === g.id ? ' chosen' : '') + '" data-g="' + g.id + '"><span class="gi">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 36)) + '</span>' +
+        '<span class="gt"><b>' + esc(g.name) + '</b><span class="gp" style="font-weight:700;color:#8A6516">' + SS.fmtPts(g.points) + ' pts</span>' +
+        (g.stock === 0 ? '<span class="pill rej" style="align-self:flex-start">' + t('out_of_stock') + '</span>' : '') +
+        (mine && mine.giftId === g.id ? '<span class="pill ok" style="align-self:flex-start">' + t('claim_chosen') + '</span>' : '') + '</span>' + ic('chev') + '</button>'
+      ).join('<div class="orsep">' + SS.tDev('or_word') + '</div>') + '</div>' +
+      (st === 'future' ? '<div class="bar light"><i style="width:' + Math.min(100, (pts / l.points) * 100) + '%"></i></div>' : '') + '</div>';
+  });
   const done = S.reds.filter((r) => r.status === 'given');
   if (done.length) h += '<div class="sec-title"><span>' + t('gifts_received') + '</span></div><div class="list">' + done.map((r) => '<div class="item" style="cursor:default"><span class="ic">' + ic('check', 20) + '</span><span class="t"><b>' + esc(r.giftName) + '</b><span>' + SS.fmtDate(r.givenAt) + ' · -' + SS.fmtPts(r.points) + ' pts</span></span></div>').join('') + '</div>';
   return h + '</main>';
 }
 function bindGifts() {
-  SS.$$('[data-req]').forEach((b) => (b.onclick = async () => {
-    const g = S.gifts.find((x) => x.id === b.dataset.req);
-    if (!g) return;
-    const ok = await SS.confirm(t('confirm_req', { g: g.name, p: SS.fmtPts(g.points) }), t('request_gift'));
-    if (!ok) return;
-    SS.run(() => SS.db.collection('shops').doc(S.cur).collection('redemptions').add({
-      memberId: S.mobile, memberName: S.member.name || '', memberCode: S.member.code, giftId: g.id, giftName: g.name,
-      points: Number(g.points), status: 'requested', at: SS.now()
-    }), t('req_sent'));
-  }));
-  SS.$$('[data-cancel]').forEach((b) => (b.onclick = async () => {
-    if (!(await SS.confirm(t('confirm_cancel_req'), t('cancel'), true))) return;
-    SS.run(() => SS.db.collection('shops').doc(S.cur).collection('redemptions').doc(b.dataset.cancel).update({ status: 'cancelled', closedAt: SS.now() }));
-  }));
+  SS.$$('[data-g]').forEach((b) => (b.onclick = () => openGift(b.dataset.g)));
+}
+/* gift kholo: badi photo + "Dukaandar ko bhejein" (sirf 1 April se, sirf ek baar, sirf apne level ka) */
+function openGift(id) {
+  const g = S.gifts.find((x) => x.id === id); if (!g) return;
+  const sh = S.shop, m = S.member, pts = Number(m.points) || 0;
+  const L = SS.levelState(S.gifts, pts), W = SS.claimWindow(sh), mine = activeClaim();
+  const lvl = L.levels.find((l) => l.points === Number(g.points));
+  let why = '', can = false;
+  if (mine) why = mine.giftId === g.id ? t('claim_done', { g: esc(mine.giftName) }) : t('gift_why_done', { g: esc(mine.giftName) });
+  else if (!L.cur || lvl.no > L.cur.no) why = t('gift_why_future', { n: SS.fmtPts(g.points - pts) });
+  else if (lvl.no < L.cur.no) why = t('gift_why_passed');
+  else if (W.state === 'before') why = t('gift_why_wait', { d: SS.fmtDateFull(W.open) });
+  else if (W.state === 'after') why = t('gift_closed');
+  else if (g.stock === 0) why = t('out_of_stock');
+  else if (m.blocked) why = t('blocked_msg');
+  else if (m.pending) why = t('join_pending_cust');
+  else can = true;
+  const s = SS.sheet(g.name,
+    '<div class="photo-pick" style="min-height:220px;cursor:default">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 64)) + '</div>' +
+    '<div class="card"><div class="kv"><span>' + t('points_needed') + '</span><b>' + SS.fmtPts(g.points) + '</b></div><div class="kv"><span>' + t('level') + '</span><b>' + lvl.no + '</b></div><div class="kv"><span>' + t('reward_points') + '</span><b>' + SS.fmtPts(pts) + '</b></div></div>' +
+    (lvl.gifts.length > 1 ? '<div class="pick1 lvlbox" style="padding:8px 10px;border-radius:0">⚠️ ' + SS.tDev('glvl_pick_one') + '</div>' : '') +
+    (can ? '<button class="btn gold big" id="send">' + ic('check') + t('send_to_shop') + '</button>' : '<div class="warn">' + why + '</div>'));
+  const btn = s.el.querySelector('#send');
+  if (btn) btn.onclick = async () => {
+    if (!(await SS.confirm(SS.tDev('claim_confirm', { g: g.name }), t('send_to_shop')))) return;
+    try {
+      await SS.run(() => SS.db.collection('shops').doc(S.cur).collection('redemptions').doc(SS.claimId(S.mobile, sh)).set({
+        memberId: S.mobile, memberName: m.name || S.profile.name || '', memberCode: m.code, giftId: g.id, giftName: g.name,
+        points: Number(g.points), level: lvl.no, schemeNo: curScheme(), status: 'requested', at: SS.now()
+      }), t('claim_sent_ok'));
+      s.close();
+    } catch (e) {}
+  };
+}
+/* naya level paar hua? ek baar badhai ka popup */
+function maybeLevelPopup() {
+  if (!S.gifts.length || !S.member) return;
+  const L = SS.levelState(S.gifts, S.member.points);
+  const key = 'ss_lvlseen_' + S.cur + '_' + S.mobile + '_' + curScheme();
+  let seen = 0;
+  try { seen = Number(localStorage.getItem(key)) || 0; } catch (e) {}
+  const c = L.cur ? L.cur.no : 0;
+  if (c === seen) return;
+  try { localStorage.setItem(key, String(c)); } catch (e) {}
+  if (c < seen) return;
+  const s = SS.sheet(t('glvl_popup_t'),
+    '<div class="bigcongrats">🎉</div><h3 class="center" style="margin:0">' + t('glvl_done', { l: c }) + '</h3>' +
+    '<div class="okbox center">' + t('glvl_popup_gift', { g: esc(L.cur.gifts.map((g) => g.name).join(' / ')) }) + '</div>' +
+    (L.next ? '<div class="center">' + t('glvl_next', { l: L.next.no, p: SS.fmtPts(S.member.points), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - S.member.points) }) + '</div>' : '<div class="center"><b>' + t('glvl_all') + '</b></div>') +
+    '<button class="btn gold big" id="gg">' + ic('gift') + t('glvl_popup_btn') + '</button>');
+  s.el.querySelector('#gg').onclick = () => { s.close(); S.tab = 'gifts'; draw(); window.scrollTo(0, 0); };
 }
 
 function drawProfile() {
@@ -488,9 +535,10 @@ function notifText(n) {
   if (n.kind === 'rejected') return { title: t('n_rej_t'), body: t('n_rej_b', { a: SS.fmtRs(n.amount), r: n.reason || '' }) };
   if (n.kind === 'referral') return { title: t('n_ref_t'), body: t('n_ref_b', { p: SS.fmtPts(n.points), n: n.name || '' }) };
   if (n.kind === 'gift') return { title: t('n_gift_t'), body: t('n_gift_b', { g: n.gift || '', p: SS.fmtPts(n.points) }) };
+  if (n.kind === 'level_up') return { title: t('n_lvl_t', { l: n.level }), body: n.next ? t('n_lvl_b', { l: n.level, n: n.next }) : t('n_lvl_b_all', { l: n.level }) };
   if (n.kind === 'join_ok') return { title: t('n_join_t'), body: t('n_join_b', { s: (S.shop && S.shop.name) || '' }) };
   if (n.kind === 'reversed') return { title: t('n_rev_t'), body: t('n_rev_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points), r: n.reason || '' }) };
-  if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) };
+  if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) + (n.again ? ' — ' + t('claim_again') : '') };
   return { title: n.title || 'ShopSathi', body: n.body || '' };
 }
 function openNotifs() {
@@ -637,12 +685,13 @@ async function deleteAccount() {
         await SS.deleteQuery(sref.collection('photos').where('memberId', '==', S.mobile));
         await SS.deleteQuery(sref.collection('bills').where('memberId', '==', S.mobile));
         await SS.deleteQuery(sref.collection('ledger').where('memberId', '==', S.mobile));
-        await SS.deleteQuery(sref.collection('redemptions').where('memberId', '==', S.mobile));
         await SS.db.runTransaction(async (tx) => {
           const s = await tx.get(sref); const mm = await tx.get(mref);
           if (mm.exists) tx.delete(mref);
           if (s.exists && mm.exists) tx.update(sref, { customerCount: Math.max(0, (s.data().customerCount || 1) - 1) });
         });
+        // member hatne ke baad hi gift request hat sakti hai (rules: ek scheme mein ek hi baar)
+        await SS.deleteQuery(sref.collection('redemptions').where('memberId', '==', S.mobile));
       } catch (e) { console.warn('shop cleanup', id, e); }
     }
     await SS.db.collection('users').doc(S.user.uid).delete();

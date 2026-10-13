@@ -177,3 +177,21 @@ nav.bnav .dot{position:absolute;top:0;right:8px;min-width:18px;height:18px;borde
 .warn.dupalert{border-color:#C26A00}
 .pill.dupblink{border:2px solid var(--rej);border-radius:0;animation:dupblink 1s step-end infinite}
 @keyframes dupblink{50%{border-color:transparent}}
+
+/* v1.2.0 gift levels */
+.lvlbox{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.lvlbox.cur{border:2px solid var(--gold);box-shadow:0 0 0 3px rgba(217,168,51,.18)}
+.lvlbox .lh{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:16px}
+.lvlbox.passed .grow-items{filter:blur(2.5px) grayscale(.6);opacity:.55;pointer-events:none}
+.lvlbox .pick1{background:var(--pend-bg);color:var(--pend);border:2px solid #C26A00;padding:8px 10px;font-weight:700;font-size:14px}
+.gitem{display:flex;align-items:center;gap:12px;background:#F6F7F8;border:1px solid var(--line);border-radius:14px;padding:8px;width:100%;font:inherit;text-align:left;cursor:pointer;color:inherit}
+.gitem .gi{width:72px;height:72px;border-radius:12px;background:#EEF0F2;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;color:#A7ADB3}
+.gitem .gi img{width:100%;height:100%;object-fit:cover}
+.gitem .gt{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.gitem .gt b{font-size:16px;line-height:1.2}
+.gitem.chosen{border:2px solid var(--ok);background:var(--ok-bg)}
+.orsep{display:flex;align-items:center;gap:10px;color:var(--pend);font-weight:800;font-size:15px}
+.orsep::before,.orsep::after{content:"";flex:1;height:2px;background:#E8C25A}
+.lvlhero{background:rgba(255,255,255,.55);border:1px solid rgba(217,168,51,.6);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.lvlhero b{font-size:16px}
+.bigcongrats{font-size:56px;text-align:center;line-height:1}
