@@ -1,6 +1,6 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.2.0 — Firestore Security Rules
+// ShopSathi v1.2.2 — Firestore Security Rules
 // v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
@@ -166,9 +166,9 @@ service cloud.firestore {
       }
 
       // ---- bill photos (alag doc taaki list halki rahe) ----
+      // v1.2.2: badi bill photo sirf dukaandar/staff dekh sakte hain (customer nahi — rate compare na ho)
       match /photos/{billId} {
-        allow read: if isManager(shopId)
-          || (signedIn() && resource.data.memberId == myMobile());
+        allow read: if isManager(shopId);
         allow create: if isManager(shopId)
           || (signedIn() && request.resource.data.memberId == myMobile()
               && request.resource.data.data.size() < 400000);
