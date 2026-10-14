@@ -1,5 +1,5 @@
-/* ShopSathi business service worker — v1.2.0 (network-first, offline cache) */
-const CACHE = 'ss-business-v1.2.0';
+/* ShopSathi business service worker — v1.2.1 (network-first, offline cache) */
+const CACHE = 'ss-business-v1.2.1';
 const CORE = ['./', './index.html', './manifest.json', '../shared/theme.css', '../shared/config.js', '../shared/i18n.js', '../shared/common.js', '../icons/biz-192.png', '../icons/biz-512.png'];
 const CDN = /^https:\/\/(www\.gstatic\.com\/firebasejs|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

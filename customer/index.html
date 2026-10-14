@@ -372,6 +372,7 @@ function drawGifts() {
   else if (W.state === 'open') h += L.cur ? '<div class="okbox dupalert" style="font-weight:700">' + ic('gift', 18) + ' ' + t('claim_open') + '</div>' : '<div class="warn">' + t('claim_open_none') + '</div>';
   else h += '<div class="warn">' + t('gift_closed') + '</div>';
   if (!L.levels.length) h += '<div class="empty">' + t('no_gifts_yet') + '</div>';
+  else h += '<div class="rulebox">📌 ' + SS.tDev('glvl_rule') + '</div>';
   L.levels.forEach((l) => {
     const st = !L.cur || l.no > L.cur.no ? 'future' : l.no < L.cur.no ? 'passed' : 'cur';
     const right = st === 'passed' ? '<span class="pill grey">' + t('glvl_passed') + '</span>'
