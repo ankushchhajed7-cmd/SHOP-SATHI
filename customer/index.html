@@ -569,7 +569,8 @@ async function openBill(id) {
   if (!b) return;
   const st = b._local ? t('st_queued') : t('st_' + b.status);
   const m = SS.sheet(t('bill_detail'),
-    '<div class="photo-pick" id="ph" style="cursor:zoom-in">' + (b.thumb ? '<img alt="Bill" src="' + b.thumb + '">' : ic('image', 40)) + '</div>' +
+    // bill ki photo sirf chhoti (rate padhne layak nahi) — badi photo sirf dukaandar ke Business app mein
+    '<div class="row" style="gap:12px;align-items:center"><span class="billthumb">' + (b.thumb ? '<img alt="Bill" src="' + b.thumb + '">' : ic('receipt', 28)) + '</span><span class="small muted">' + t('bill_photo_private') + '</span></div>' +
     '<div class="card"><div class="kv"><span>' + t('status') + '</span><b>' + esc(st) + '</b></div>' +
     '<div class="kv"><span>' + t('bill_date') + '</span><b>' + SS.fmtDateFull(b.billDate) + '</b></div>' +
     (b.billNo ? '<div class="kv"><span>' + t('bill_no') + '</span><b>' + esc(b.billNo) + '</b></div>' : '') +
@@ -578,11 +579,6 @@ async function openBill(id) {
     (b.status === 'rejected' ? '<div class="kv"><span>' + t('reason') + '</span><b style="color:#9B2C2C">' + esc(b.reason || '-') + '</b></div>' : '') +
     '<div class="kv"><span>' + t('uploaded_at') + '</span><b>' + SS.fmtDT(b.uploadedAt) + '</b></div></div>' +
     (b.status === 'pending' ? '<button class="btn danger full" id="rm">' + ic('trash') + t('remove_bill') + '</button>' : ''));
-  let full = null;
-  SS.db.collection('shops').doc(S.cur).collection('photos').doc(id).get().then((d) => {
-    if (d.exists && d.data().data) { full = d.data().data; m.el.querySelector('#ph').innerHTML = '<img alt="Bill" src="' + full + '">'; }
-  }).catch(() => {});
-  m.el.querySelector('#ph').onclick = () => { if (full || b.thumb) SS.zoom(full || b.thumb); };
   const rm = m.el.querySelector('#rm');
   if (rm) rm.onclick = async () => {
     if (!(await SS.confirm(t('confirm_remove_bill'), t('remove_bill'), true))) return;
@@ -683,7 +679,8 @@ async function deleteAccount() {
       const mref = sref.collection('members').doc(S.mobile);
       try {
         await SS.deleteQuery(mref.collection('notifs'));
-        await SS.deleteQuery(sref.collection('photos').where('memberId', '==', S.mobile));
+        const myBills = await sref.collection('bills').where('memberId', '==', S.mobile).get();
+        for (const d of myBills.docs) await sref.collection('photos').doc(d.id).delete().catch(() => {});
         await SS.deleteQuery(sref.collection('bills').where('memberId', '==', S.mobile));
         await SS.deleteQuery(sref.collection('ledger').where('memberId', '==', S.mobile));
         await SS.db.runTransaction(async (tx) => {
