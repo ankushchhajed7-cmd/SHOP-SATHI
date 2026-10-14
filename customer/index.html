@@ -312,9 +312,9 @@ function drawHome() {
   let pct = 0, gline = t('no_gifts_yet');
   if (L.next) {
     pct = Math.min(100, (pts / L.next.points) * 100);
-    gline = '<div class="lvlhero">' + (L.cur ? '<b>' + t('glvl_done', { l: L.cur.no }) + '</b>' : '') +
-      '<span>' + (L.cur ? t('glvl_next', { l: L.next.no, p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })
-        : t('glvl_need', { l: L.next.no, g: gname(L.next), p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })) + '</span></div>';
+    gline = '<div class="lvlhero">' + (L.cur ? '<b>' + t('glvl_done', { l: SS.lvlName(L.cur.no) }) + '</b>' : '') +
+      '<span>' + (L.cur ? t('glvl_next', { l: SS.lvlName(L.next.no), p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })
+        : t('glvl_need', { l: SS.lvlName(L.next.no), g: gname(L.next), p: SS.fmtPts(pts), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - pts) })) + '</span></div>';
   } else if (L.cur) { pct = 100; gline = '<div class="lvlhero"><b>' + t('glvl_all') + '</b></div>'; }
   const ss = schemeState();
   const days = SS.daysLeft(sh.schemeEnd);
@@ -366,7 +366,7 @@ function drawGifts() {
   const L = SS.levelState(S.gifts, pts), W = SS.claimWindow(sh), mine = activeClaim();
   let h = miniHeader(t('gift_list')) + '<main class="page">' +
     '<div class="card between"><div><div class="small muted">' + t('reward_points') + '</div><b style="font-size:28px">' + SS.fmtPts(pts) + '</b></div>' +
-    (L.cur ? '<span class="pill ok">' + t('glvl_your', { l: L.cur.no }) + '</span>' : '') + '</div>';
+    (L.cur ? '<span class="pill ok">' + t('glvl_your', { l: SS.lvlName(L.cur.no) }) + '</span>' : '') + '</div>';
   if (mine) h += '<div class="okbox">' + ic('check', 18) + ' ' + (mine.status === 'given' ? t('claim_given', { g: esc(mine.giftName) }) : t('claim_done', { g: esc(mine.giftName) })) + '</div>';
   else if (W.state === 'before') h += '<div class="warn">🗓️ ' + t('claim_opens', { d: SS.fmtDateFull(W.open) }) + '</div>';
   else if (W.state === 'open') h += L.cur ? '<div class="okbox dupalert" style="font-weight:700">' + ic('gift', 18) + ' ' + t('claim_open') + '</div>' : '<div class="warn">' + t('claim_open_none') + '</div>';
@@ -378,7 +378,7 @@ function drawGifts() {
     const right = st === 'passed' ? '<span class="pill grey">' + t('glvl_passed') + '</span>'
       : st === 'cur' ? '<span class="pill ok">' + t('glvl_cur') + '</span>'
       : '<span class="small muted">' + t('need_more', { n: SS.fmtPts(l.points - pts) }) + '</span>';
-    h += '<div class="lvlbox ' + st + '"><div class="lh"><span>🎁 ' + t('glvl_head', { l: l.no, p: SS.fmtPts(l.points) }) + '</span>' + right + '</div>' +
+    h += '<div class="lvlbox ' + st + '"><div class="lh"><span>' + t('glvl_head', { l: SS.lvlName(l.no), p: SS.fmtPts(l.points) }) + '</span>' + right + '</div>' +
       (l.gifts.length > 1 ? '<div class="pick1">⚠️ ' + SS.tDev('glvl_pick_one') + '</div>' : '') +
       '<div class="grow-items col" style="gap:8px">' + l.gifts.map((g) =>
         '<button class="gitem' + (mine && mine.giftId === g.id ? ' chosen' : '') + '" data-g="' + g.id + '"><span class="gi">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 36)) + '</span>' +
@@ -413,7 +413,7 @@ function openGift(id) {
   else can = true;
   const s = SS.sheet(g.name,
     '<div class="photo-pick" style="min-height:220px;cursor:default">' + (g.photo ? '<img alt="" src="' + g.photo + '">' : ic('gift', 64)) + '</div>' +
-    '<div class="card"><div class="kv"><span>' + t('points_needed') + '</span><b>' + SS.fmtPts(g.points) + '</b></div><div class="kv"><span>' + t('level') + '</span><b>' + lvl.no + '</b></div><div class="kv"><span>' + t('reward_points') + '</span><b>' + SS.fmtPts(pts) + '</b></div></div>' +
+    '<div class="card"><div class="kv"><span>' + t('points_needed') + '</span><b>' + SS.fmtPts(g.points) + '</b></div><div class="kv"><span>' + t('level') + '</span><b>' + SS.lvlName(lvl.no) + '</b></div><div class="kv"><span>' + t('reward_points') + '</span><b>' + SS.fmtPts(pts) + '</b></div></div>' +
     (lvl.gifts.length > 1 ? '<div class="pick1 lvlbox" style="padding:8px 10px;border-radius:0">⚠️ ' + SS.tDev('glvl_pick_one') + '</div>' : '') +
     (can ? '<button class="btn gold big" id="send">' + ic('check') + t('send_to_shop') + '</button>' : '<div class="warn">' + why + '</div>'));
   const btn = s.el.querySelector('#send');
@@ -440,9 +440,9 @@ function maybeLevelPopup() {
   try { localStorage.setItem(key, String(c)); } catch (e) {}
   if (c < seen) return;
   const s = SS.sheet(t('glvl_popup_t'),
-    '<div class="bigcongrats">🎉</div><h3 class="center" style="margin:0">' + t('glvl_done', { l: c }) + '</h3>' +
+    '<div class="bigcongrats">🎉</div><h3 class="center" style="margin:0">' + t('glvl_done', { l: SS.lvlName(c) }) + '</h3>' +
     '<div class="okbox center">' + t('glvl_popup_gift', { g: esc(L.cur.gifts.map((g) => g.name).join(' / ')) }) + '</div>' +
-    (L.next ? '<div class="center">' + t('glvl_next', { l: L.next.no, p: SS.fmtPts(S.member.points), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - S.member.points) }) + '</div>' : '<div class="center"><b>' + t('glvl_all') + '</b></div>') +
+    (L.next ? '<div class="center">' + t('glvl_next', { l: SS.lvlName(L.next.no), p: SS.fmtPts(S.member.points), t: SS.fmtPts(L.next.points), n: SS.fmtPts(L.next.points - S.member.points) }) + '</div>' : '<div class="center"><b>' + t('glvl_all') + '</b></div>') +
     '<button class="btn gold big" id="gg">' + ic('gift') + t('glvl_popup_btn') + '</button>');
   s.el.querySelector('#gg').onclick = () => { s.close(); S.tab = 'gifts'; draw(); window.scrollTo(0, 0); };
 }
@@ -536,7 +536,7 @@ function notifText(n) {
   if (n.kind === 'rejected') return { title: t('n_rej_t'), body: t('n_rej_b', { a: SS.fmtRs(n.amount), r: n.reason || '' }) };
   if (n.kind === 'referral') return { title: t('n_ref_t'), body: t('n_ref_b', { p: SS.fmtPts(n.points), n: n.name || '' }) };
   if (n.kind === 'gift') return { title: t('n_gift_t'), body: t('n_gift_b', { g: n.gift || '', p: SS.fmtPts(n.points) }) };
-  if (n.kind === 'level_up') return { title: t('n_lvl_t', { l: n.level }), body: n.next ? t('n_lvl_b', { l: n.level, n: n.next }) : t('n_lvl_b_all', { l: n.level }) };
+  if (n.kind === 'level_up') return { title: t('n_lvl_t', { l: SS.lvlName(n.level) }), body: n.next ? t('n_lvl_b', { l: SS.lvlName(n.level), n: SS.lvlName(n.next) }) : t('n_lvl_b_all', { l: SS.lvlName(n.level) }) };
   if (n.kind === 'join_ok') return { title: t('n_join_t'), body: t('n_join_b', { s: (S.shop && S.shop.name) || '' }) };
   if (n.kind === 'reversed') return { title: t('n_rev_t'), body: t('n_rev_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points), r: n.reason || '' }) };
   if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) + (n.again ? ' — ' + t('claim_again') : '') };

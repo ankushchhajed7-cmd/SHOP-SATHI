@@ -1,4 +1,4 @@
-# ShopSathi v1.2.2 — har bill par reward points
+# ShopSathi v1.3.0 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.3.0 (14 Oct 2026)** — Gift levels ke naam: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💠 Platinum, ⚙️ Titanium, ⚪ Pearl, 🔴 Ruby, 🟢 Emerald, 💎 Diamond, 👑 Kohinoor (10 se upar Kohinoor 2, 3…). Kharidi wale purane levels ka naam ab Normal / VIP / Super VIP (bonus ×1.1 / ×1.25 waise hi).
 - **v1.2.2 (14 Oct 2026)** — Customer app mein bill kholne par sirf chhota thumbnail (badi photo / zoom nahi), taaki koi rate compare na kar sake; Firebase rules mein badi photo sirf dukaandar/staff padh sakte hain. Business app mein badi photo + zoom pehle jaisa. **firestore.rules dobara Publish karein.**
 - **v1.2.1 (14 Oct 2026)** — Gifts page par niyam: sirf sabse oonche pahunche level ka ek gift milega, pichhle levels ke gift alag se nahi.
 - **v1.2.0 (13 Oct 2026)** — Gift levels: gifts ke points se Level 1, 2, 3…; naya level paar karne par pichhle level ke gifts blur 🔒; Home par "Level X ke liye N points aur" + 🎉 badhai (popup + notification); ek level mein do gift hon to "इनमें से कोई एक चुनें" + "या"; gift chunne ka button sirf scheme khatam hone ke agle din (1 April) se settlement tareekh tak, ek scheme mein sirf ek baar (rules mein pakka), dukaandar cancel kare to ek baar phir mauka. **firestore.rules dobara Publish karein.**

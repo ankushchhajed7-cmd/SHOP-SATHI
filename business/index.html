@@ -882,7 +882,7 @@ function vGifts() {
   h += B.reds.length ? B.reds.map((r) => {
     const m = B.memMap[r.memberId] || {};
     const low = (m.points || 0) < r.points;
-    return '<div class="card col"><div class="between"><b style="font-size:17px">' + esc(r.giftName) + '</b><span class="pill gold">' + (r.level ? t('level') + ' ' + r.level + ' · ' : '') + SS.fmtPts(r.points) + ' pts</span></div>' +
+    return '<div class="card col"><div class="between"><b style="font-size:17px">' + esc(r.giftName) + '</b><span class="pill gold">' + (r.level ? SS.lvlName(r.level) + ' · ' : '') + SS.fmtPts(r.points) + ' pts</span></div>' +
       '<div class="small muted">' + esc(r.memberName || m.name || '') + ' · ' + esc(r.memberCode || '') + ' · ' + t('has_points', { p: SS.fmtPts(m.points || 0) }) + ' · ' + SS.fmtDate(r.at) + '</div>' +
       (low ? '<div class="err">' + t('w_low_points') + '</div>' : '') +
       '<div class="btnrow"><button class="btn danger sm" data-rcancel="' + r.id + '">' + ic('x', 18) + t('cancel') + '</button><button class="btn ok sm" data-rgive="' + r.id + '"' + (low ? ' disabled' : '') + '>' + ic('check', 18) + t('gift_given') + '</button></div></div>';

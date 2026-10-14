@@ -90,9 +90,9 @@
   ['st_approved', 'Approved', 'मंज़ूर', 'मंजूर', 'Approved'],
   ['st_rejected', 'Rejected', 'अस्वीकार', 'नाकारले', 'Rejected'],
   ['st_queued', 'Upload line mein', 'अपलोड कतार में', 'अपलोड रांगेत', 'Waiting to upload'],
-  ['lvl_silver', 'Silver', 'सिल्वर', 'सिल्व्हर', 'Silver'],
-  ['lvl_gold', 'Gold', 'गोल्ड', 'गोल्ड', 'Gold'],
-  ['lvl_platinum', 'Platinum', 'प्लैटिनम', 'प्लॅटिनम', 'Platinum'],
+  ['lvl_silver', 'Normal', 'नॉर्मल', 'नॉर्मल', 'Normal'],
+  ['lvl_gold', 'VIP', 'VIP', 'VIP', 'VIP'],
+  ['lvl_platinum', 'Super VIP', 'सुपर VIP', 'सुपर VIP', 'Super VIP'],
   ['lg_welcome', 'Welcome bonus', 'वेलकम बोनस', 'वेलकम बोनस', 'Welcome bonus'],
   ['lg_bill', 'Bill points', 'बिल पॉइंट्स', 'बिल पॉइंट्स', 'Bill points'],
   ['lg_referral', 'Refer bonus', 'रेफर बोनस', 'रेफर बोनस', 'Referral bonus'],
@@ -133,7 +133,7 @@
   ['birthday_on', 'Happy Birthday! Is mahine aapko 2x points', 'जन्मदिन मुबारक! इस महीने आपको 2x पॉइंट्स', 'वाढदिवसाच्या शुभेच्छा! या महिन्यात 2x पॉइंट्स', 'Happy Birthday! 2x points this month'],
   ['blocked_msg', 'Aapka account is dukaan ne rok diya hai. Dukaandar se baat karein.', 'आपका अकाउंट इस दुकान ने रोक दिया है। दुकानदार से बात करें।', 'तुमचे खाते या दुकानाने थांबवले आहे. दुकानदाराशी बोला.', 'This shop has blocked your account. Please talk to the shop.'],
   ['level', 'Level', 'लेवल', 'लेव्हल', 'Level'],
-  ['level_info', 'Gold: {g} kharidi par ×{gm} points · Platinum: {p} par ×{pm}', 'गोल्ड: {g} खरीदी पर ×{gm} पॉइंट्स · प्लैटिनम: {p} पर ×{pm}', 'गोल्ड: {g} खरेदीवर ×{gm} पॉइंट्स · प्लॅटिनम: {p} वर ×{pm}', 'Gold: ×{gm} points after {g} purchase · Platinum: ×{pm} after {p}'],
+  ['level_info', 'VIP: {g} kharidi par ×{gm} points · Super VIP: {p} par ×{pm}', 'VIP: {g} खरीदी पर ×{gm} पॉइंट्स · सुपर VIP: {p} पर ×{pm}', 'VIP: {g} खरेदीवर ×{gm} पॉइंट्स · सुपर VIP: {p} वर ×{pm}', 'VIP: ×{gm} points after {g} purchase · Super VIP: ×{pm} after {p}'],
   ['total_purchase', 'Kul kharidi', 'कुल खरीदी', 'एकूण खरेदी', 'Total purchase'],
   ['welcome_bonus', 'Welcome bonus', 'वेलकम बोनस', 'वेलकम बोनस', 'Welcome bonus'],
   ['points_rule', 'Points ka niyam', 'पॉइंट्स का नियम', 'पॉइंट्सचा नियम', 'Points rule'],
@@ -294,8 +294,8 @@
   ['festival_2x', 'Festival offer: abhi sabko 2x points', 'त्योहार ऑफर: अभी सबको 2x पॉइंट्स', 'सण ऑफर: आता सर्वांना 2x पॉइंट्स', 'Festival offer: 2x points for all now'],
   ['levels', 'Customer level', 'ग्राहक लेवल', 'ग्राहक लेव्हल', 'Customer levels'],
   ['levels_hint', 'Scheme mein kul kharidi par level badhta hai, aur points ×multiplier milte hain. 0 = band.', 'स्कीम में कुल खरीदी पर लेवल बढ़ता है, और पॉइंट्स ×मल्टीप्लायर मिलते हैं। 0 = बंद।', 'योजनेतील एकूण खरेदीवर लेव्हल वाढते आणि पॉइंट्स ×गुणक मिळतात. 0 = बंद.', 'Level rises with total purchase in the scheme; points get ×multiplier. 0 = off.'],
-  ['gold_from', 'Gold: kharidi ₹', 'गोल्ड: खरीदी ₹', 'गोल्ड: खरेदी ₹', 'Gold from ₹'],
-  ['plat_from', 'Platinum: kharidi ₹', 'प्लैटिनम: खरीदी ₹', 'प्लॅटिनम: खरेदी ₹', 'Platinum from ₹'],
+  ['gold_from', 'VIP: kharidi ₹', 'VIP: खरीदी ₹', 'VIP: खरेदी ₹', 'VIP from ₹'],
+  ['plat_from', 'Super VIP: kharidi ₹', 'सुपर VIP: खरीदी ₹', 'सुपर VIP: खरेदी ₹', 'Super VIP from ₹'],
   ['multiplier', 'Points ×', 'पॉइंट्स ×', 'पॉइंट्स ×', 'Points ×'],
   ['gift_name', 'Gift ka naam', 'गिफ्ट का नाम', 'गिफ्टचे नाव', 'Gift name'],
   ['add_gift', 'Gift jodein', 'गिफ्ट जोड़ें', 'गिफ्ट जोडा', 'Add gift'],
@@ -307,7 +307,7 @@
   ['err_days', 'Kam se kam 1 din', 'कम से कम 1 दिन', 'किमान 1 दिवस', 'At least 1 day'],
   ['err_scheme_dates', 'Scheme ki tareekh sahi daalein', 'स्कीम की तारीख सही डालें', 'योजनेची तारीख योग्य टाका', 'Enter valid scheme dates'],
   ['err_settle_date', 'Settlement tareekh scheme khatam hone ke baad ki ho', 'सेटलमेंट तारीख स्कीम खत्म होने के बाद की हो', 'सेटलमेंट तारीख योजना संपल्यानंतरची असावी', 'Settlement date must be after the scheme end'],
-  ['err_levels', 'Platinum ki kharidi Gold se zyada ho', 'प्लैटिनम की खरीदी गोल्ड से ज़्यादा हो', 'प्लॅटिनम खरेदी गोल्डपेक्षा जास्त असावी', 'Platinum amount must be above Gold'],
+  ['err_levels', 'Super VIP ki kharidi VIP se zyada ho', 'सुपर VIP की खरीदी VIP से ज़्यादा हो', 'सुपर VIP खरेदी VIP पेक्षा जास्त असावी', 'Super VIP amount must be above VIP'],
   ['shop_created', 'Dukaan ban gayi! Ab QR lagayein', 'दुकान बन गई! अब QR लगाएं', 'दुकान तयार! आता QR लावा', 'Shop created! Now put up the QR'],
   // ---------- business: main ----------
   ['pending_bills', 'Pending Bills', 'पेंडिंग बिल', 'प्रलंबित बिले', 'Pending Bills'],
@@ -515,18 +515,28 @@
   ['fresh_ok', 'Saaf ho gaya — naya customer AK-0001 se shuru hoga', 'साफ़ हो गया — नया ग्राहक AK-0001 से शुरू होगा', 'साफ झाले — नवीन ग्राहक AK-0001 पासून सुरू होईल', 'Done — new customers start from 0001'],
   ['fresh_ok_code', 'Saaf ho gaya. (Customer number 0001 se shuru karne ke liye Firebase mein naye Rules Publish karein)', 'साफ़ हो गया। (ग्राहक नंबर 0001 से शुरू करने के लिए Firebase में नए Rules Publish करें)', 'साफ झाले. (ग्राहक नंबर 0001 पासून सुरू करण्यासाठी Firebase मध्ये नवीन Rules Publish करा)', 'Done. (Publish the new Firebase rules to restart customer numbers at 0001)'],
   // ---------- v1.2.0: gift levels + saal ke ant mein ek baar gift ----------
-  ['glvl_need', '🎯 Level {l} — {g}<br>{p} / {t} · Level {l} poora karne ke liye <b>{n} points aur</b>', '🎯 लेवल {l} — {g}<br>{p} / {t} · लेवल {l} पूरा करने के लिए <b>{n} पॉइंट्स और</b>', '🎯 लेव्हल {l} — {g}<br>{p} / {t} · लेव्हल {l} पूर्ण करण्यासाठी <b>आणखी {n} पॉइंट्स</b>', '🎯 Level {l} — {g}<br>{p} / {t} · <b>{n} more points</b> to complete Level {l}'],
-  ['glvl_done', '🎉 Badhai ho! Aapne Level {l} poora kar liya!', '🎉 बधाई हो! आपने लेवल {l} पूरा कर लिया!', '🎉 अभिनंदन! तुम्ही लेव्हल {l} पूर्ण केले!', '🎉 Congratulations! You completed Level {l}!'],
-  ['glvl_next', '➡️ Level {l} ki taraf: {p} / {t} — <b>{n} points aur</b>', '➡️ लेवल {l} की ओर: {p} / {t} — <b>{n} पॉइंट्स और</b>', '➡️ लेव्हल {l} कडे: {p} / {t} — <b>आणखी {n} पॉइंट्स</b>', '➡️ Towards Level {l}: {p} / {t} — <b>{n} more points</b>'],
-  ['glvl_all', '🏆 Badhai ho! Aapne saare levels poore kar liye!', '🏆 बधाई हो! आपने सारे लेवल पूरे कर लिए!', '🏆 अभिनंदन! तुम्ही सर्व लेव्हल पूर्ण केले!', '🏆 Congratulations! You completed all levels!'],
-  ['glvl_head', 'Level {l} — {p} points', 'लेवल {l} — {p} पॉइंट्स', 'लेव्हल {l} — {p} पॉइंट्स', 'Level {l} — {p} points'],
+  ['glvl_need', '{l} — {g}<br>{p} / {t} · {l} banne ke liye <b>{n} points aur</b>', '{l} — {g}<br>{p} / {t} · {l} बनने के लिए <b>{n} पॉइंट्स और</b>', '{l} — {g}<br>{p} / {t} · {l} होण्यासाठी <b>आणखी {n} पॉइंट्स</b>', '{l} — {g}<br>{p} / {t} · <b>{n} more points</b> to reach {l}'],
+  ['glvl_done', '🎉 Badhai ho! Aap {l} ban gaye!', '🎉 बधाई हो! आप {l} बन गए!', '🎉 अभिनंदन! तुम्ही {l} झालात!', '🎉 Congratulations! You reached {l}!'],
+  ['glvl_next', '➡️ {l} ki taraf: {p} / {t} — <b>{n} points aur</b>', '➡️ {l} की ओर: {p} / {t} — <b>{n} पॉइंट्स और</b>', '➡️ {l} कडे: {p} / {t} — <b>आणखी {n} पॉइंट्स</b>', '➡️ Towards {l}: {p} / {t} — <b>{n} more points</b>'],
+  ['glvl_all', '👑 Badhai ho! Aapne sabse ooncha level Kohinoor paa liya!', '👑 बधाई हो! आपने सबसे ऊँचा लेवल कोहिनूर पा लिया!', '👑 अभिनंदन! तुम्ही सर्वोच्च लेव्हल कोहिनूर गाठले!', '👑 Congratulations! You reached the top level!'],
+  ['glvl_head', '{l} — {p} points', '{l} — {p} पॉइंट्स', '{l} — {p} पॉइंट्स', '{l} — {p} points'],
   ['bill_photo_private', 'Bill ki photo dukaandar ke paas surakshit hai', 'बिल की फोटो दुकानदार के पास सुरक्षित है', 'बिलाचा फोटो दुकानदाराकडे सुरक्षित आहे', 'The bill photo is kept safely with the shop'],
+  ['gname_1', 'Bronze', 'ब्रॉन्ज़', 'ब्रॉन्झ', 'Bronze'],
+  ['gname_2', 'Silver', 'सिल्वर', 'सिल्व्हर', 'Silver'],
+  ['gname_3', 'Gold', 'गोल्ड', 'गोल्ड', 'Gold'],
+  ['gname_4', 'Platinum', 'प्लैटिनम', 'प्लॅटिनम', 'Platinum'],
+  ['gname_5', 'Titanium', 'टाइटेनियम', 'टायटॅनियम', 'Titanium'],
+  ['gname_6', 'Pearl', 'पर्ल (मोती)', 'पर्ल (मोती)', 'Pearl'],
+  ['gname_7', 'Ruby', 'रूबी (माणिक)', 'रुबी (माणिक)', 'Ruby'],
+  ['gname_8', 'Emerald', 'एमराल्ड (पन्ना)', 'एमराल्ड (पाचू)', 'Emerald'],
+  ['gname_9', 'Diamond', 'डायमंड (हीरा)', 'डायमंड (हिरा)', 'Diamond'],
+  ['gname_10', 'Kohinoor', 'कोहिनूर', 'कोहिनूर', 'Kohinoor'],
   ['glvl_rule', 'Dhyan dein: scheme ke ant mein aap jis sabse oonche level tak pahunchenge, aapko sirf usi level ka ek gift milega. Pichhle levels ke gift alag se nahi milte — har naya level pichhle level ki jagah le leta hai.', 'ध्यान दें: स्कीम के अंत में आप जिस सबसे ऊँचे लेवल तक पहुँचेंगे, आपको सिर्फ उसी लेवल का एक गिफ्ट मिलेगा। पिछले लेवल के गिफ्ट अलग से नहीं मिलते — हर नया लेवल पिछले लेवल की जगह ले लेता है।', 'लक्षात घ्या: योजनेच्या शेवटी तुम्ही ज्या सर्वात उंच लेव्हलपर्यंत पोहोचाल, त्याच लेव्हलचे एकच गिफ्ट तुम्हाला मिळेल. मागील लेव्हलचे गिफ्ट वेगळे मिळत नाहीत — प्रत्येक नवीन लेव्हल मागील लेव्हलची जागा घेते.', 'Note: at the end of the scheme you get ONE gift from the highest level you reach. Gifts of earlier levels are not given separately — each new level replaces the previous one.'],
   ['glvl_pick_one', 'Inmein se koi ek gift chunein (dono nahi milenge)', 'इनमें से कोई एक गिफ्ट चुनें (दोनों नहीं मिलेंगे)', 'यांपैकी कोणतेही एक गिफ्ट निवडा (दोन्ही मिळणार नाहीत)', 'Choose any ONE of these gifts (not both)'],
   ['or_word', 'ya', 'या', 'किंवा', 'or'],
   ['glvl_passed', '🔒 Aap aage badh gaye', '🔒 आप आगे बढ़ गए', '🔒 तुम्ही पुढे गेलात', '🔒 You moved ahead'],
   ['glvl_cur', '✓ Aapka level', '✓ आपका लेवल', '✓ तुमचा लेव्हल', '✓ Your level'],
-  ['glvl_your', 'Level {l} poora', 'लेवल {l} पूरा', 'लेव्हल {l} पूर्ण', 'Level {l} done'],
+  ['glvl_your', 'Aap: {l}', 'आप: {l}', 'तुम्ही: {l}', 'You: {l}'],
   ['glvl_popup_t', 'Badhai ho!', 'बधाई हो!', 'अभिनंदन!', 'Congratulations!'],
   ['glvl_popup_gift', 'Aap is level ka gift paane ke haqdaar ho gaye: {g}', 'आप इस लेवल का गिफ्ट पाने के हकदार हो गए: {g}', 'तुम्ही या लेव्हलचे गिफ्ट मिळवण्यास पात्र झालात: {g}', 'You are now eligible for this level gift: {g}'],
   ['glvl_popup_btn', 'Gifts dekhein', 'गिफ्ट देखें', 'गिफ्ट पहा', 'See gifts'],
@@ -545,9 +555,9 @@
   ['gift_why_future', 'Is gift ke liye {n} points aur chahiye', 'इस गिफ्ट के लिए {n} पॉइंट्स और चाहिए', 'या गिफ्टसाठी आणखी {n} पॉइंट्स हवेत', '{n} more points needed for this gift'],
   ['gift_why_passed', '🔒 Aap is level se aage badh gaye — apne level ka gift chunein', '🔒 आप इस लेवल से आगे बढ़ गए — अपने लेवल का गिफ्ट चुनें', '🔒 तुम्ही या लेव्हलच्या पुढे गेलात — तुमच्या लेव्हलचे गिफ्ट निवडा', '🔒 You moved past this level — choose your level’s gift'],
   ['gift_why_wait', '🗓️ Gift chunne ka samay {d} se shuru hoga', '🗓️ गिफ्ट चुनने का समय {d} से शुरू होगा', '🗓️ गिफ्ट निवडण्याची वेळ {d} पासून सुरू होईल', '🗓️ Gift selection opens on {d}'],
-  ['n_lvl_t', '🎉 Badhai ho! Level {l} poora', '🎉 बधाई हो! लेवल {l} पूरा', '🎉 अभिनंदन! लेव्हल {l} पूर्ण', '🎉 Level {l} complete!'],
-  ['n_lvl_b', 'Aapne Level {l} poora kar liya — ab Level {n} ki taraf badhein!', 'आपने लेवल {l} पूरा कर लिया — अब लेवल {n} की ओर बढ़ें!', 'तुम्ही लेव्हल {l} पूर्ण केले — आता लेव्हल {n} कडे चला!', 'You completed Level {l} — now go for Level {n}!'],
-  ['n_lvl_b_all', 'Aapne Level {l} — saare levels poore kar liye!', 'आपने लेवल {l} — सारे लेवल पूरे कर लिए!', 'तुम्ही लेव्हल {l} — सर्व लेव्हल पूर्ण केले!', 'You completed Level {l} — all levels done!'],
+  ['n_lvl_t', '🎉 Badhai ho! Aap {l} ban gaye', '🎉 बधाई हो! आप {l} बन गए', '🎉 अभिनंदन! तुम्ही {l} झालात', '🎉 You reached {l}!'],
+  ['n_lvl_b', 'Ab {n} ki taraf badhein!', 'अब {n} की ओर बढ़ें!', 'आता {n} कडे चला!', 'Now go for {n}!'],
+  ['n_lvl_b_all', 'Aapne sabse ooncha level {l} paa liya!', 'आपने सबसे ऊँचा लेवल {l} पा लिया!', 'तुम्ही सर्वोच्च लेव्हल {l} गाठले!', 'You reached the top level {l}!'],
   ['n_new_gift_t', 'Naya gift request', 'नई गिफ्ट रिक्वेस्ट', 'नवीन गिफ्ट विनंती', 'New gift request'],
   ['n_new_gift_b', '{c} ne {g} chuna', '{c} ने {g} चुना', '{c} ने {g} निवडले', '{c} chose {g}'],
   // ---------- admin ----------
@@ -586,6 +596,13 @@
     if (s == null) s = k;
     if (v) Object.keys(v).forEach((x) => { s = s.split('{' + x + '}').join(v[x]); });
     return s;
+  };
+  /* gift level ka naam: 1 Bronze … 10 Kohinoor (10 se upar: Kohinoor 2, 3 …) */
+  const GICON = ['🥉', '🥈', '🥇', '💠', '⚙️', '⚪', '🔴', '🟢', '💎', '👑'];
+  SS.lvlName = function (no) {
+    no = Number(no) || 1;
+    if (no <= 10) return GICON[no - 1] + ' ' + SS.t('gname_' + no);
+    return GICON[9] + ' ' + SS.t('gname_10') + ' ' + (no - 9);
   };
   /* duplicate jaisi zaroori chetavni: Hinglish chuna ho to bhi Devanagari Hindi mein */
   SS.tDev = function (k, v) {
