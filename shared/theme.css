@@ -195,3 +195,4 @@ nav.bnav .dot{position:absolute;top:0;right:8px;min-width:18px;height:18px;borde
 .lvlhero{background:rgba(255,255,255,.55);border:1px solid rgba(217,168,51,.6);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .lvlhero b{font-size:16px}
 .bigcongrats{font-size:56px;text-align:center;line-height:1}
+.rulebox{background:var(--pend-bg);color:#5C430D;border:2px solid #8A6516;padding:10px 12px;font-weight:600;font-size:14px;line-height:1.55}
