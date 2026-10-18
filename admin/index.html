@@ -4,6 +4,7 @@
 <!--
   ShopSathi — Super Admin (sirf Ankush ke liye)
   v1.0.0 (2026-10-10): saari dukaanein, plan, chalu/band, WhatsApp owner.
+  v1.4.1 (2026-10-18): PIN tab — bhoole PIN / gum hue phone ke liye PIN reset (GitHub Action, sirf Admin).
   v1.4.0 (2026-10-18): Backup tab — har Ravivar 8 PM GitHub (private) backup ka status + phone mein turant backup.
   v1.1.1 (2026-10-11): install hone wala app (manifest + service worker + alag maroon icon).
   v1.1.0 (2026-10-11): free plan hataya; nayi dukaan approve (+30 din / +1 saal / Lifetime) ya mana; activation codes.
@@ -65,8 +66,9 @@ async function onLogin(u) {
 async function load() {
   try {
     SS.busy(true);
-    const [q, lq, bq] = await Promise.all([SS.db.collection('shops').get(), SS.db.collection('licenses').get().catch(() => null), SS.db.collection('meta').doc('backup').get().catch(() => null)]);
+    const [q, lq, bq, pq] = await Promise.all([SS.db.collection('shops').get(), SS.db.collection('licenses').get().catch(() => null), SS.db.collection('meta').doc('backup').get().catch(() => null), SS.db.collection('meta').doc('pinreset').get().catch(() => null)]);
     A.backup = bq && bq.exists ? bq.data() : null;
+    A.pinr = pq && pq.exists ? pq.data() : null;
     A.shops = SS.docs(q).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     A.lics = lq ? SS.docs(lq).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : [];
     draw();
@@ -81,11 +83,12 @@ function stateOf(s) {
 }
 function draw() {
   const q = A.q.toLowerCase();
-  const tabs = '<div class="seg"><button data-at="shops" class="' + (A.tab !== 'codes' && A.tab !== 'backup' ? 'on' : '') + '">' + t('a_shops') + '</button><button data-at="codes" class="' + (A.tab === 'codes' ? 'on' : '') + '">' + t('lic_codes') + '</button><button data-at="backup" class="' + (A.tab === 'backup' ? 'on' : '') + '">' + (backupOld() ? '⚠️ ' : '') + t('bk_tab') + '</button></div>';
+  const tabs = '<div class="seg"><button data-at="shops" class="' + (['codes', 'backup', 'pin'].indexOf(A.tab) < 0 ? 'on' : '') + '">' + t('a_shops') + '</button><button data-at="codes" class="' + (A.tab === 'codes' ? 'on' : '') + '">' + t('lic_codes') + '</button><button data-at="backup" class="' + (A.tab === 'backup' ? 'on' : '') + '">' + (backupOld() ? '⚠️ ' : '') + t('bk_tab') + '</button><button data-at="pin" class="' + (A.tab === 'pin' ? 'on' : '') + '">🔑 PIN</button></div>';
   const tot = { shops: A.shops.length, pend: A.shops.filter((s) => stateOf(s) === 'pending').length, ok: A.shops.filter((s) => stateOf(s) === 'ok').length, cust: A.shops.reduce((a, s) => a + (s.customerCount || 0), 0) };
   let body = '';
   if (A.tab === 'codes') body = codesHTML();
   else if (A.tab === 'backup') body = backupHTML();
+  else if (A.tab === 'pin') body = pinHTML();
   else {
     let list = A.shops.filter((s) => !q || (s.name || '').toLowerCase().indexOf(q) >= 0 || s.id.toLowerCase().indexOf(q) >= 0 || (s.mobile || '').indexOf(q) >= 0 || (s.city || '').toLowerCase().indexOf(q) >= 0);
     if (A.f !== 'all') list = list.filter((s) => stateOf(s) === A.f);
@@ -106,6 +109,7 @@ function draw() {
   SS.$$('[data-act]').forEach((b) => (b.onclick = () => act(b.dataset.act, b.dataset.id)));
   bindCodes();
   bindBackup();
+  bindPin();
 }
 function card(s) {
   const st = stateOf(s);
@@ -190,6 +194,39 @@ async function phoneBackup() {
   finally { SS.busy(false); }
 }
 function bindBackup() { const b = SS.$('#bkphone'); if (b) b.onclick = phoneBackup; }
+
+/* ---------------- PIN reset (GitHub Action "ShopSathi PIN Reset" — sirf Admin) ---------------- */
+function newPin() {
+  const bad = /^(\d)\1{5}$|^(123456|654321|123123|112233|121212)$/;
+  let p = '';
+  do { const a = new Uint32Array(1); crypto.getRandomValues(a); p = String(a[0] % 900000 + 100000); } while (bad.test(p));
+  return p;
+}
+function pinHTML() {
+  if (!A.prp) A.prp = newPin();
+  const gh = 'https://github.com/' + BK_REPO() + '/actions/workflows/reset-pin.yml';
+  const h = A.pinr && A.pinr.history ? A.pinr.history : [];
+  const hist = h.length ? '<div class="sec-title"><span>' + t('pr_history') + '</span></div><div class="list">' + h.map((r) => '<div class="item" style="cursor:default"><span class="ic">' + ic(r.pin ? 'lock' : 'logout', 18) + '</span><span class="t"><b>' + esc(r.mobile) + (r.name ? ' · ' + esc(r.name) : '') + '</b><span>' + (r.pin ? t('pr_done_pin') : t('pr_done_lo')) + ' · ' + SS.fmtDT(r.at) + '</span></span></div>').join('') + '</div>' : '';
+  return '<div class="card"><b>🔑 ' + t('pr_title') + '</b><div class="small muted" style="margin-top:6px">' + t('pr_help') + '</div></div>' +
+    '<div class="card"><label class="small muted">' + t('pr_mobile') + '</label><input class="inp" id="prm" type="tel" inputmode="numeric" maxlength="10" placeholder="98XXXXXXXX" value="' + esc(A.prm || '') + '">' +
+    '<label class="small muted" style="display:block;margin-top:10px">' + t('pr_pin') + '</label><div style="display:flex;gap:8px"><input class="inp" id="prp" inputmode="numeric" maxlength="6" value="' + esc(A.prp) + '" style="flex:1;font-weight:700;letter-spacing:4px;text-align:center"><button class="btn light" id="prnew" aria-label="' + t('pr_newpin') + '">' + ic('refresh') + '</button></div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn light full" id="prcm">' + ic('share') + '1. ' + t('pr_copy_m') + '</button><button class="btn light full" id="prcp">' + ic('share') + '2. ' + t('pr_copy_p') + '</button></div>' +
+    '<a class="btn gold big" style="margin-top:10px" target="_blank" rel="noopener" href="' + esc(gh) + '">' + ic('lock') + '3. ' + t('pr_open') + '</a>' +
+    '<button class="btn dark full" id="prwa" style="margin:10px 0">' + ic('wa') + '4. ' + t('pr_wa_btn') + '</button>' +
+    '<div class="small muted">' + t('pr_lo_help') + '</div></div>' + hist;
+}
+function bindPin() {
+  const m = SS.$('#prm'); if (!m) return;
+  const p = SS.$('#prp');
+  m.oninput = () => { m.value = m.value.replace(/\D/g, '').slice(0, 10); A.prm = m.value; };
+  p.oninput = () => { p.value = p.value.replace(/\D/g, '').slice(0, 6); A.prp = p.value; };
+  SS.$('#prnew').onclick = () => { A.prp = newPin(); p.value = A.prp; };
+  const okM = () => { if (!SS.validMobile(A.prm)) { SS.toast(t('pr_bad_m'), 'err'); return false; } return true; };
+  const okP = () => { if (!/^\d{6}$/.test(A.prp || '')) { SS.toast(t('pr_bad_p'), 'err'); return false; } return true; };
+  SS.$('#prcm').onclick = () => { if (okM()) SS.copy(A.prm); };
+  SS.$('#prcp').onclick = () => { if (okP()) SS.copy(A.prp); };
+  SS.$('#prwa').onclick = () => { if (okM() && okP()) window.open(SS.wa(A.prm, t('pr_wa_msg', { p: A.prp, u: (SS.CFG.baseUrl || '') + 'customer/' })), '_blank'); };
+}
 
 /* ---------------- Activation codes ---------------- */
 function licDaysLabel(d) { return d >= SS.LIFETIME_DAYS ? t('lic_lifetime') : d % 365 === 0 ? (d / 365) + ' ' + t('a_year') : d + ' ' + t('a_days'); }
