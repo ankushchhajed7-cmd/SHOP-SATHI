@@ -1,6 +1,6 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.2.2 — Firestore Security Rules
+// ShopSathi v1.4.0 — Firestore Security Rules
 // v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
@@ -51,6 +51,12 @@ service cloud.firestore {
     // ---- har user ka apna profile ----
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read: if isAdmin();
+    }
+
+    // ---- backup status (GitHub Action likhta hai, sirf Super Admin padhta hai) ----
+    match /meta/{doc} {
+      allow read: if isAdmin();
     }
 
     // ---- dukaan ----
@@ -189,7 +195,7 @@ service cloud.firestore {
       // v1.2.0: ek scheme mein ek hi baar (doc id = <mobile>_s<schemeNo>), sirf scheme khatam hone ke
       // agle din se settlement ki aakhri tareekh tak; customer cancel nahi kar sakta (dukaandar cancel kare to phir mauka)
       match /redemptions/{rid} {
-        allow read: if isManager(shopId)
+        allow read: if isManager(shopId) || isAdmin()
           || (signedIn() && resource.data.memberId == myMobile());
         allow create: if signedIn()
           && rid == myMobile() + '_s' + string(shopData(shopId).get('schemeNo', 1))
@@ -205,7 +211,7 @@ service cloud.firestore {
 
       // ---- points ledger (hisaab) ----
       match /ledger/{lid} {
-        allow read: if isManager(shopId)
+        allow read: if isManager(shopId) || isAdmin()
           || (signedIn() && resource.data.memberId == myMobile());
         allow create: if isManager(shopId)
           || (signedIn()
