@@ -4,6 +4,7 @@
 <!--
   ShopSathi — Super Admin (sirf Ankush ke liye)
   v1.0.0 (2026-10-10): saari dukaanein, plan, chalu/band, WhatsApp owner.
+  v1.4.0 (2026-10-18): Backup tab — har Ravivar 8 PM GitHub (private) backup ka status + phone mein turant backup.
   v1.1.1 (2026-10-11): install hone wala app (manifest + service worker + alag maroon icon).
   v1.1.0 (2026-10-11): free plan hataya; nayi dukaan approve (+30 din / +1 saal / Lifetime) ya mana; activation codes.
 -->
@@ -64,7 +65,8 @@ async function onLogin(u) {
 async function load() {
   try {
     SS.busy(true);
-    const [q, lq] = await Promise.all([SS.db.collection('shops').get(), SS.db.collection('licenses').get().catch(() => null)]);
+    const [q, lq, bq] = await Promise.all([SS.db.collection('shops').get(), SS.db.collection('licenses').get().catch(() => null), SS.db.collection('meta').doc('backup').get().catch(() => null)]);
+    A.backup = bq && bq.exists ? bq.data() : null;
     A.shops = SS.docs(q).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     A.lics = lq ? SS.docs(lq).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : [];
     draw();
@@ -79,10 +81,11 @@ function stateOf(s) {
 }
 function draw() {
   const q = A.q.toLowerCase();
-  const tabs = '<div class="seg"><button data-at="shops" class="' + (A.tab !== 'codes' ? 'on' : '') + '">' + t('a_shops') + '</button><button data-at="codes" class="' + (A.tab === 'codes' ? 'on' : '') + '">' + t('lic_codes') + '</button></div>';
+  const tabs = '<div class="seg"><button data-at="shops" class="' + (A.tab !== 'codes' && A.tab !== 'backup' ? 'on' : '') + '">' + t('a_shops') + '</button><button data-at="codes" class="' + (A.tab === 'codes' ? 'on' : '') + '">' + t('lic_codes') + '</button><button data-at="backup" class="' + (A.tab === 'backup' ? 'on' : '') + '">' + (backupOld() ? '⚠️ ' : '') + t('bk_tab') + '</button></div>';
   const tot = { shops: A.shops.length, pend: A.shops.filter((s) => stateOf(s) === 'pending').length, ok: A.shops.filter((s) => stateOf(s) === 'ok').length, cust: A.shops.reduce((a, s) => a + (s.customerCount || 0), 0) };
   let body = '';
   if (A.tab === 'codes') body = codesHTML();
+  else if (A.tab === 'backup') body = backupHTML();
   else {
     let list = A.shops.filter((s) => !q || (s.name || '').toLowerCase().indexOf(q) >= 0 || s.id.toLowerCase().indexOf(q) >= 0 || (s.mobile || '').indexOf(q) >= 0 || (s.city || '').toLowerCase().indexOf(q) >= 0);
     if (A.f !== 'all') list = list.filter((s) => stateOf(s) === A.f);
@@ -102,6 +105,7 @@ function draw() {
   SS.$$('[data-f]').forEach((b) => (b.onclick = () => { A.tab = 'shops'; A.f = b.dataset.f; draw(); }));
   SS.$$('[data-act]').forEach((b) => (b.onclick = () => act(b.dataset.act, b.dataset.id)));
   bindCodes();
+  bindBackup();
 }
 function card(s) {
   const st = stateOf(s);
@@ -135,6 +139,57 @@ async function act(a, id) {
   if (!upd) return;
   try { await SS.run(() => ref.update(upd), t('saved')); Object.assign(s, upd); draw(); } catch (e) {}
 }
+
+/* ---------------- Backup (har Ravivar 8 PM, private GitHub repo) ---------------- */
+const BK_REPO = () => SS.CFG.backupRepo || 'ankushchhajed7-cmd/SHOPSATHI-BACKUP';
+function backupOld() { const b = A.backup; return !b || !b.ok || SS.now() - (b.at || 0) > 8 * 86400000; }
+function nextSunday8pm() {
+  const d = new Date(); const r = new Date(d); r.setHours(20, 0, 0, 0);
+  let add = (7 - d.getDay()) % 7; if (add === 0 && d >= r) add = 7;
+  r.setDate(r.getDate() + add); return r.getTime();
+}
+function backupHTML() {
+  const b = A.backup, gh = 'https://github.com/' + BK_REPO();
+  let st;
+  if (!b) st = '<div class="err">' + t('bk_none') + '</div>';
+  else if (!b.ok) st = '<div class="err dupalert">❌ ' + t('bk_fail', { d: SS.fmtDT(b.at) }) + '<br><small>' + esc(b.error || '') + '</small></div>';
+  else st = '<div class="' + (backupOld() ? 'err dupalert' : 'okbox') + '">' + (backupOld() ? '⚠️ ' + t('bk_old') + '<br>' : '✅ ') + t('bk_last', { d: SS.fmtDT(b.at) }) + '</div>' +
+    '<div class="card"><div class="kv"><span>' + t('a_shops') + '</span><b>' + (b.shops || 0) + '</b></div><div class="kv"><span>' + t('customers') + '</span><b>' + (b.customers || 0) + '</b></div><div class="kv"><span>' + t('bk_bills') + '</span><b>' + (b.bills || 0) + '</b></div><div class="kv"><span>' + t('bk_size') + '</span><b>' + (b.sizeKB || 0) + ' KB</b></div><div class="kv"><span>' + t('bk_kept') + '</span><b>' + (b.kept || 1) + '</b></div></div>';
+  const hist = b && b.history && b.history.length ? '<div class="sec-title"><span>' + t('bk_history') + '</span></div><div class="list">' + b.history.map((h) => '<div class="item" style="cursor:default"><span class="ic">' + ic(h.ok ? 'check' : 'x', 18) + '</span><span class="t"><b>' + esc(h.date) + '</b><span>' + (h.shops || 0) + ' ' + t('a_shops') + ' · ' + (h.customers || 0) + ' ' + t('customers') + ' · ' + (h.bills || 0) + ' ' + t('bk_bills') + '</span></span></div>').join('') + '</div>' : '';
+  return st +
+    '<div class="small muted center">🗓️ ' + t('bk_next', { d: SS.fmtDT(nextSunday8pm()) }) + '</div>' +
+    '<a class="btn gold big" target="_blank" rel="noopener" href="' + esc(gh + '/tree/main/backups') + '">' + ic('download') + t('bk_open') + '</a>' +
+    '<a class="btn light full" target="_blank" rel="noopener" href="' + esc(gh + '/actions/workflows/backup.yml') + '">' + ic('refresh') + t('bk_now') + '</a>' +
+    '<button class="btn dark full" id="bkphone">' + ic('download') + t('bk_phone') + '</button><div class="small muted">' + t('bk_phone_help') + '</div>' + hist;
+}
+/* phone mein abhi poora backup (JSON, GitHub backup jaisa hi format — restore ho sakta hai) */
+async function phoneBackup() {
+  const dump = async (ref, subs) => {
+    const out = [];
+    const q = await ref.get();
+    for (const d of q.docs) {
+      const o = { _id: d.id, data: d.data() };
+      if (subs) {
+        o.sub = {};
+        for (const c of subs) {
+          const cq = await d.ref.collection(c).get();
+          o.sub[c] = cq.docs.map((x) => ({ _id: x.id, data: x.data() }));
+        }
+      }
+      out.push(o);
+    }
+    return out;
+  };
+  try {
+    SS.busy(true);
+    const data = { shops: await dump(SS.db.collection('shops'), ['members', 'bills', 'gifts', 'redemptions', 'ledger']), users: await dump(SS.db.collection('users')), licenses: await dump(SS.db.collection('licenses')) };
+    const blob = new Blob([JSON.stringify({ backupAt: new Date().toISOString(), source: 'admin-phone', data })], { type: 'application/json' });
+    SS.download('ShopSathi_Backup_' + SS.isoDate() + '.json', blob);
+    SS.toast(t('bk_phone_ok', { n: data.shops.length }), 'ok');
+  } catch (e) { SS.toast(SS.authErr(e) + ' — ' + t('admin_rules_hint'), 'err'); }
+  finally { SS.busy(false); }
+}
+function bindBackup() { const b = SS.$('#bkphone'); if (b) b.onclick = phoneBackup; }
 
 /* ---------------- Activation codes ---------------- */
 function licDaysLabel(d) { return d >= SS.LIFETIME_DAYS ? t('lic_lifetime') : d % 365 === 0 ? (d / 365) + ' ' + t('a_year') : d + ' ' + t('a_days'); }

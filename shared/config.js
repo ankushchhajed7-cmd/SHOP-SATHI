@@ -1,5 +1,5 @@
 /* ============================================================
-   ShopSathi v1.3.0 — CONFIG (sirf yahi file badalni hai)
+   ShopSathi v1.4.0 — CONFIG (sirf yahi file badalni hai)
    ------------------------------------------------------------
    1) Firebase Console > Project settings > General > Your apps
       > Web app (</>) > "SDK setup and configuration" > Config
@@ -27,6 +27,9 @@ window.SS_CONFIG = {
   upiId: "",
 
   planPrice: 199,   // ₹ per mahina (free plan nahi hai — har nayi dukaan admin approve ya activation code se chalu)
+
+  // Har Ravivar 8 PM ka backup is PRIVATE repo mein jaata hai (Admin panel > Backup)
+  backupRepo: "ankushchhajed7-cmd/SHOPSATHI-BACKUP",
 
   // GitHub Pages ka link (QR code isi se banta hai)
   baseUrl: "https://ankushchhajed7-cmd.github.io/SHOP-SATHI/"
