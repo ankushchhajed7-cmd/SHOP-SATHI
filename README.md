@@ -1,4 +1,4 @@
-# ShopSathi v1.4.0 — har bill par reward points
+# ShopSathi v1.4.1 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.4.1 (18 Oct 2026)** — Admin panel mein **🔑 PIN** tab: customer/dukaandar PIN bhoole ya phone gum ho to naya PIN (apne aap banta hai) → GitHub "ShopSathi PIN Reset" workflow → WhatsApp par naya PIN. Saara data waisa hi, purane phone logout. Rules badlaav nahi.
 - **v1.4.0 (18 Oct 2026)** — Auto backup: har Ravivar 8 PM saari dukaanon ka data private repo SHOPSATHI-BACKUP mein (JSON + har dukaan ki Excel, 6 mahine tak); Admin panel mein Backup tab (status, history, GitHub link, abhi backup, phone mein JSON). Rules: admin ko backup ke liye padhne ki ijazat. **firestore.rules Publish karein.**
 - **v1.3.0 (14 Oct 2026)** — Gift levels ke naam: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💠 Platinum, ⚙️ Titanium, ⚪ Pearl, 🔴 Ruby, 🟢 Emerald, 💎 Diamond, 👑 Kohinoor (10 se upar Kohinoor 2, 3…). Kharidi wale purane levels ka naam ab Normal / VIP / Super VIP (bonus ×1.1 / ×1.25 waise hi).
 - **v1.2.2 (14 Oct 2026)** — Customer app mein bill kholne par sirf chhota thumbnail (badi photo / zoom nahi), taaki koi rate compare na kar sake; Firebase rules mein badi photo sirf dukaandar/staff padh sakte hain. Business app mein badi photo + zoom pehle jaisa. **firestore.rules dobara Publish karein.**
