@@ -461,6 +461,7 @@ function drawProfile() {
     '<div class="btnrow"><button class="btn light" id="hist">' + ic('list') + t('points_history') + '</button><button class="btn light" id="shops">' + ic('shop') + t('my_shops') + '</button></div>' +
     '<label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
     '<button class="btn light full" id="edit">' + ic('edit') + t('edit_name') + '</button>' +
+    '<button class="btn light full" id="cpin">' + ic('lock') + t('cp_title') + '</button>' +
     '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
     '<button class="btn danger full" id="del">' + ic('trash') + t('delete_account') + '</button>' +
     '<div class="ver">ShopSathi v' + SS.VERSION + '<br>© Ankush New Vision</div></main>';
@@ -477,6 +478,7 @@ function bindProfile() {
   SS.$('#shops').onclick = openShops;
   SS.$('#lang').onchange = (e) => { SS.setLang(e.target.value); SS.db.collection('users').doc(S.user.uid).set({ lang: e.target.value }, { merge: true }).catch(() => {}); draw(); };
   SS.$('#lo').onclick = async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); };
+  SS.$('#cpin').onclick = () => SS.changePin();
   SS.$('#del').onclick = deleteAccount;
   SS.$('#edit').onclick = editName;
 }

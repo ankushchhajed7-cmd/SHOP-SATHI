@@ -11,6 +11,7 @@ Firebase project: shopsathi-25794 · Super Admin: 9765838383 · Backup repo (pri
 - v1.3.0 — level naam Bronze → Kohinoor; kharidi levels Normal / VIP / Super VIP
 - v1.4.0 (18 Oct 2026) — auto backup har Ravivar 8 PM (private repo) + Admin panel Backup tab
 - v1.4.1 (18 Oct 2026) — Admin 🔑 PIN tab + backup repo ka "ShopSathi PIN Reset" workflow (naya PIN + purane phone logout)
+- v1.4.2 (18 Oct 2026) — PIN badlein: Customer Profile + Business "Aur" (owner + staff); purana PIN zaroori, aasaan PIN mana
 
 ## Settings / decisions
 - Free plan nahi; har dukaan admin approve ya activation code se. Customer app hamesha free.
@@ -19,7 +20,7 @@ Firebase project: shopsathi-25794 · Super Admin: 9765838383 · Backup repo (pri
 - Har rules badlaav ke baad Firebase Console mein Publish zaroori.
 - PR merge: Ankush kehte hain tab Claude merge karta hai.
 - Backup setup poora (18 Oct 2026): repo private, secret set, pehla backup OK, rules v1.4.0 published.
-- Phone badla: customer wahi mobile + PIN se **Login** kare (Register nahi) — data cloud mein hai. PIN bhoole to Admin → 🔑 PIN.
+- Phone badla: customer wahi mobile + PIN se **Login** kare (Register nahi) — data cloud mein hai. PIN bhoole to Admin → 🔑 PIN; PIN yaad ho to khud Profile/Aur → PIN badlein.
 
 ## Pending / ideas
 - Security sujhaav baaki: App Lock (3), activity log (4), staff rok (5), shakki gatividhi (6), API key rok (9), App Check (10)

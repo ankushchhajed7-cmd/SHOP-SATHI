@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.4.1';
+  SS.VERSION = '1.4.2';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
@@ -294,6 +294,33 @@
       const m = SS.sheet(SS.t('confirm'), '<p style="margin:0">' + SS.esc(msg) + '</p><label class="f">' + SS.t('pin') + '<input class="inp" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" data-p></label><button class="btn dark full" data-y>' + SS.t('confirm') + '</button>', { onClose: () => res(null) });
       m.el.querySelector('[data-y]').onclick = () => { const v = m.el.querySelector('[data-p]').value.trim(); res(v); m.el.parentNode.remove(); };
     });
+  };
+  /* v1.4.2: PIN badlein (purana PIN → naya PIN ×2). Customer + Business dono apps */
+  SS.weakPin = (p) => /^(\d)\1{5}$/.test(p) || ['123456', '654321', '123123', '112233', '121212', '012345', '234567', '345678', '456789', '987654'].indexOf(p) >= 0;
+  SS.changePin = function () {
+    const f = (id, l, ac) => '<label class="f">' + l + '<input class="inp" id="' + id + '" type="password" inputmode="numeric" maxlength="6" autocomplete="' + ac + '" style="letter-spacing:6px;font-weight:700"></label>';
+    const m = SS.sheet(SS.t('cp_title'), '<p class="small muted" style="margin:0">' + SS.t('cp_help') + '</p>' +
+      f('cp0', SS.t('cp_old'), 'current-password') + f('cp1', SS.t('cp_new'), 'new-password') + f('cp2', SS.t('cp_new2'), 'new-password') +
+      '<div class="err hidden" id="cperr"></div><button class="btn dark big" id="cpgo">' + SS.ic('lock') + SS.t('cp_btn') + '</button>');
+    const $ = (s) => m.el.querySelector(s);
+    ['#cp0', '#cp1', '#cp2'].forEach((s) => { $(s).oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); $('#cperr').classList.add('hidden'); }; });
+    const bad = (msg) => { const e = $('#cperr'); e.textContent = msg; e.classList.remove('hidden'); };
+    $('#cpgo').onclick = async () => {
+      const o = $('#cp0').value, n = $('#cp1').value, n2 = $('#cp2').value;
+      if (!SS.validPin(o)) return bad(SS.t('cp_e_old'));
+      if (!SS.validPin(n)) return bad(SS.t('err_pin'));
+      if (n !== n2) return bad(SS.t('cp_e_match'));
+      if (n === o) return bad(SS.t('cp_e_same'));
+      if (SS.weakPin(n)) return bad(SS.t('cp_e_weak'));
+      try {
+        SS.busy(true);
+        try { await SS.reauth(o); } catch (e) { return bad(/wrong-password|invalid-credential|invalid-login/.test(e.code || '') ? SS.t('cp_e_wrong') : SS.authErr(e)); }
+        await SS.auth.currentUser.updatePassword(n);
+        m.close(); SS.toast(SS.t('cp_ok'), 'ok');
+      } catch (e) { bad(SS.authErr(e)); }
+      finally { SS.busy(false); }
+    };
+    setTimeout(() => $('#cp0').focus(), 50);
   };
   SS.zoom = function (src) {
     const z = document.createElement('div');

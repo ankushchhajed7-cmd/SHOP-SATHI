@@ -965,6 +965,7 @@ function vMore() {
     it('m_plan', 'star', t('plan'), t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) })) +
     (isOwner() ? it('m_set', 'settings', t('settings'), t('settings_sub')) + it('m_staff', 'users', t('staff'), t('staff_sub')) + it('m_xl', 'download', t('excel_backup'), t('excel_sub')) : '') +
     '</div><label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
+    '<button class="btn light full" id="cpin">' + ic('lock') + t('cp_title') + '</button>' +
     '<button class="btn light full" id="lo">' + ic('logout') + t('logout') + '</button>' +
     '<div class="ver">ShopSathi Business v' + SS.VERSION + ' · ' + esc(B.mobile) + ' · ' + t(isOwner() ? 'owner' : 'staff') + '<br>© Ankush New Vision</div></main>';
 }
@@ -1311,6 +1312,7 @@ function bindAll() {
   const lang = SS.$('#lang');
   if (lang) lang.onchange = (e) => { SS.setLang(e.target.value); SS.db.collection('users').doc(B.user.uid).set({ lang: e.target.value }, { merge: true }).catch(() => {}); draw(); };
   on('lo', async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); });
+  on('cpin', () => SS.changePin());
   // qr
   if (B.view && B.view.name === 'qr') {
     const link = (SS.CFG.baseUrl || '') + 'customer/?join=' + encodeURIComponent(B.shopId);
