@@ -372,7 +372,7 @@ function draw() {
   if (!SS.shopOk(B.shop)) return drawLocked();
   const y = window.scrollY;
   let html;
-  if (B.view) html = ({ cust: vCustomer, reports: vReports, settings: vSettings, staff: vStaff, qr: vQR }[B.view.name] || vHome)();
+  if (B.view) html = ({ cust: vCustomer, reports: vReports, settings: vSettings, staff: vStaff, qr: vQR, msgs: vMsgs }[B.view.name] || vHome)();
   else html = ({ home: vHome, bills: vBills, customers: vCustomers, gifts: vGifts, more: vMore }[B.tab] || vHome)();
   app.innerHTML = html + (B.view ? '' : navHTML());
   bindAll();
@@ -787,6 +787,7 @@ function vCustomer() {
     (B.shop.birthdayDouble ? '<div class="kv"><span>' + t('birth_month') + '</span><b>' + (m.dobMonth ? SS.MONTHS[m.dobMonth - 1] + ' ' : '') + '<button class="lnk" id="setdob">' + (m.dobMonth ? t('change') : t('set')) + '</button></b></div>' : '') + '</div>' +
     (m.blocked ? '<div class="err">' + t('cust_blocked') + '</div>' : '') +
     '<div class="btnrow"><a class="btn light" href="tel:' + esc(m.id) + '">' + ic('phone') + t('call') + '</a><a class="btn light" target="_blank" rel="noopener" href="' + SS.wa(m.id, waText) + '">' + ic('wa') + 'WhatsApp</a></div>' +
+    '<button class="btn gold full" id="sendmsg">' + ic('bell') + t('msg_to_one') + '</button>' +
     '<div class="btnrow"><button class="btn dark" id="addbill">' + ic('plus') + t('add_bill') + '</button>' + (isOwner() ? '<button class="btn ' + (m.blocked ? 'light' : 'danger') + '" id="blk">' + ic('ban') + (m.blocked ? t('unblock') : t('block')) + '</button>' : '') + '</div>' +
     '<div class="seg">' + seg('bills', t('nav_bills')) + seg('ledger', t('points_history')) + seg('gifts', t('nav_gifts')) + '</div>' +
     '<div class="list">' + rows + '</div></main>';
@@ -962,6 +963,7 @@ function vMore() {
   return tabHdr(t('nav_more')) + '<main class="page"><div class="list menu">' +
     it('m_qr', 'qr', t('shop_qr'), t('shop_qr_sub')) +
     it('m_rep', 'chart', t('reports'), t('reports_sub')) +
+    it('m_msg', 'bell', t('msg_menu'), t('msg_menu_sub')) +
     it('m_plan', 'star', t('plan'), t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) })) +
     (isOwner() ? it('m_set', 'settings', t('settings'), t('settings_sub')) + it('m_staff', 'users', t('staff'), t('staff_sub')) + it('m_xl', 'download', t('excel_backup'), t('excel_sub')) : '') +
     '</div><label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
@@ -1153,7 +1155,7 @@ async function freshStart() {
     const sref = shopRef();
     const mem = (await sref.collection('members').get()).docs;
     for (const d of mem) await SS.deleteQuery(d.ref.collection('notifs'));
-    for (const c of ['bills', 'photos', 'ledger', 'redemptions']) await SS.deleteQuery(sref.collection(c));
+    for (const c of ['bills', 'photos', 'ledger', 'redemptions', 'msgs']) await SS.deleteQuery(sref.collection(c));
     // customers ek-ek karke, saath mein ginti ghatao
     for (const d of mem) {
       await SS.db.runTransaction(async (tx) => {
@@ -1184,7 +1186,7 @@ async function deleteShop() {
     const sref = shopRef();
     const mem = (await sref.collection('members').get()).docs;
     for (const d of mem) await SS.deleteQuery(d.ref.collection('notifs'));
-    for (const c of ['members', 'bills', 'photos', 'ledger', 'redemptions', 'gifts']) await SS.deleteQuery(sref.collection(c));
+    for (const c of ['members', 'bills', 'photos', 'ledger', 'redemptions', 'gifts', 'msgs']) await SS.deleteQuery(sref.collection(c));
     await sref.delete();
     await SS.db.collection('users').doc(B.user.uid).set({ ownShop: null }, { merge: true });
     SS.toast(t('shop_deleted'), 'ok');
@@ -1192,6 +1194,101 @@ async function deleteShop() {
     await SS.logout();
   } catch (e) { SS.toast(SS.authErr(e), 'err'); }
   finally { SS.busy(false); }
+}
+
+/* ---------------- Sandesh (v1.5.0): customer ko message — app khulte hi ek baar popup ---------------- */
+const MSG_MAX = 300;
+function msgRecipients(to) {
+  return to === 'all' ? B.members.filter((m) => !m.pending) : (B.memMap[to] ? [B.memMap[to]] : []);
+}
+function canDelMsg(g) { return isOwner() || g.byUid === B.user.uid; }
+function msgStatus(g) {
+  const r = (g.readBy || []).length;
+  if (g.to !== 'all') return r ? '<span class="pill ok">✅ ' + t('msg_read') + '</span>' : '<span class="pill pend">⏳ ' + t('msg_unread') + '</span>';
+  const all = r && r >= (g.total || 0);
+  return '<span class="pill ' + (all ? 'ok' : 'pend') + '">' + (all ? '✅ ' : '⏳ ') + t('msg_read_n', { r, n: g.total || 0 }) + '</span>';
+}
+function vMsgs() {
+  const list = B.msgs;
+  const rows = !list ? '<div class="empty">' + t('loading') + '</div>' : list.length ? list.map((g) =>
+    '<button class="item" data-msg="' + g.id + '"><span class="ic">' + ic(g.to === 'all' ? 'users' : 'user', 20) + '</span><span class="t"><b>' + esc(g.to === 'all' ? t('msg_all_n', { n: g.total || 0 }) : (g.toName || g.to)) + '</b><span class="msgline">' + esc(g.text) + '</span><span>' + SS.fmtDT(g.at) + (g.by ? ' · ' + esc(g.by) : '') + '</span></span>' + msgStatus(g) + '</button>').join('') : '<div class="empty">' + t('msg_none') + '</div>';
+  return sub(t('msg_menu')) + '<main class="page" style="padding-top:6px">' +
+    '<div class="card col"><span class="small muted">' + t('msg_help') + '</span>' +
+    (isOwner() ? '<button class="btn gold big" id="msgall">' + ic('users') + t('msg_to_all', { n: msgRecipients('all').length }) + '</button>' : '') +
+    '<span class="small muted">' + t('msg_one_help') + '</span></div>' +
+    '<div class="sec-title"><span>' + t('msg_sent') + '</span></div><div class="list">' + rows + '</div></main>';
+}
+async function loadMsgs() {
+  try {
+    const q = await shopRef().collection('msgs').orderBy('at', 'desc').limit(50).get();
+    B.msgs = SS.docs(q);
+  } catch (e) { B.msgs = []; SS.toast(SS.authErr(e), 'err'); }
+  if (B.view && B.view.name === 'msgs') render();
+}
+function composeMsg(to) {
+  const rec = msgRecipients(to);
+  if (!rec.length) return SS.toast(t('no_data'), 'err');
+  const who = to === 'all' ? t('msg_all_n', { n: rec.length }) : (rec[0].name || rec[0].code) + ' (' + rec[0].id + ')';
+  const s = SS.sheet(to === 'all' ? t('msg_to_all_t') : t('msg_to_one'),
+    '<div class="small muted">' + t('msg_to') + ': <b>' + esc(who) + '</b></div>' +
+    '<textarea class="inp" id="mt" rows="5" maxlength="' + MSG_MAX + '" placeholder="' + esc(t('msg_ph')) + '" style="height:auto;min-height:120px;padding:12px;resize:vertical;line-height:1.4"></textarea>' +
+    '<div class="small muted" style="text-align:right"><span id="mc">0</span>/' + MSG_MAX + '</div>' +
+    '<div class="small muted">' + t('msg_how') + '</div>' +
+    '<button class="btn dark big" id="ms">' + ic('bell') + t('msg_send') + '</button>');
+  const ta = s.el.querySelector('#mt');
+  ta.oninput = () => { s.el.querySelector('#mc').textContent = ta.value.length; };
+  setTimeout(() => ta.focus(), 50);
+  s.el.querySelector('#ms').onclick = async () => {
+    const text = ta.value.trim().slice(0, MSG_MAX);
+    if (!text) return SS.toast(t('msg_empty'), 'err');
+    if (to === 'all' && !(await SS.confirm(t('msg_confirm_all', { n: rec.length }), t('msg_send')))) return;
+    try {
+      SS.busy(true);
+      const sref = shopRef(), now = SS.now();
+      const mref = sref.collection('msgs').doc();
+      await mref.set({ text, to, toName: to === 'all' ? '' : (rec[0].name || rec[0].code || ''), total: rec.length, readBy: [], at: now, by: whoAmI(), byUid: B.user.uid });
+      for (let i = 0; i < rec.length; i += 400) {
+        const b = SS.db.batch();
+        rec.slice(i, i + 400).forEach((m) => b.set(sref.collection('members').doc(m.id).collection('notifs').doc(mref.id), { kind: 'msg', text, at: now, read: false }));
+        await b.commit();
+      }
+      s.close();
+      SS.toast(t('msg_sent_ok', { n: rec.length }), 'ok');
+      if (B.view && B.view.name === 'msgs') loadMsgs(); else B.msgs = null;
+    } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+    finally { SS.busy(false); }
+  };
+}
+function openMsg(id) {
+  const g = (B.msgs || []).find((x) => x.id === id);
+  if (!g) return;
+  const readSet = new Set(g.readBy || []);
+  const rec = g.to === 'all' ? B.members.filter((m) => !m.pending && (m.joinedAt || 0) <= g.at) : msgRecipients(g.to);
+  const nm = (m) => esc((m.name || m.code || m.id) + (m.code && m.name ? ' · ' + m.code : ''));
+  const read = rec.filter((m) => readSet.has(m.id)), unread = rec.filter((m) => !readSet.has(m.id));
+  const s = SS.sheet(t('msg_detail'),
+    '<div class="card msgfull">' + esc(g.text) + '</div>' +
+    '<div class="small muted">' + SS.fmtDT(g.at) + (g.by ? ' · ' + esc(g.by) : '') + '</div>' + msgStatus(g) +
+    (read.length ? '<div class="sec-title"><span>✅ ' + t('msg_read') + ' (' + read.length + ')</span></div><div class="small">' + read.map(nm).join(', ') + '</div>' : '') +
+    (unread.length ? '<div class="sec-title"><span>⏳ ' + t('msg_unread') + ' (' + unread.length + ')</span></div><div class="small">' + unread.map(nm).join(', ') + '</div>' : '') +
+    (canDelMsg(g) ? '<button class="btn danger full" id="mdel">' + ic('trash') + t('msg_del') + '</button><div class="small muted">' + t('msg_del_help') + '</div>' : ''));
+  const d = s.el.querySelector('#mdel');
+  if (d) d.onclick = async () => {
+    if (!(await SS.confirm(t('msg_del_confirm'), t('msg_del'), true))) return;
+    try {
+      SS.busy(true);
+      const sref = shopRef();
+      const ids = g.to === 'all' ? B.members.map((m) => m.id) : [g.to];
+      for (let i = 0; i < ids.length; i += 400) {
+        const b = SS.db.batch();
+        ids.slice(i, i + 400).forEach((mid) => b.delete(sref.collection('members').doc(mid).collection('notifs').doc(g.id)));
+        await b.commit();
+      }
+      await sref.collection('msgs').doc(g.id).delete();
+      s.close(); SS.toast(t('msg_deleted'), 'ok'); loadMsgs();
+    } catch (e) { SS.toast(SS.authErr(e), 'err'); }
+    finally { SS.busy(false); }
+  };
 }
 
 /* ---------------- Staff (owner) ---------------- */
@@ -1282,6 +1379,7 @@ function bindAll() {
     if (!B.custData || B.custData.id !== B.view.id) { if (B.loadingCust !== B.view.id) { B.loadingCust = B.view.id; loadCust(B.view.id).then(() => (B.loadingCust = null)); } }
     SS.$$('[data-ct]').forEach((b) => (b.onclick = () => { B.view.tab = b.dataset.ct; draw(); }));
     on('addbill', () => addBill(B.view.id));
+    on('sendmsg', () => composeMsg(B.view.id));
     on('setdob', () => {
       const mm = B.memMap[B.view.id];
       const sh = SS.sheet(t('birth_month'), '<select class="inp" id="dm">' + SS.MONTH_OPTIONS(mm.dobMonth || 0) + '</select><button class="btn dark big" id="sv">' + t('save') + '</button>');
@@ -1304,6 +1402,7 @@ function bindAll() {
   // more
   on('m_qr', () => open({ name: 'qr' }));
   on('m_rep', () => openView('reports'));
+  on('m_msg', () => { open({ name: 'msgs' }); loadMsgs(); });
   on('m_plan', openPlan);
   on('m_set', () => open({ name: 'settings' }));
   on('m_staff', () => open({ name: 'staff' }));
@@ -1335,6 +1434,11 @@ function bindAll() {
     on('delshop', deleteShop);
     on('fresh', freshStart);
     const bk = SS.$('#back'); if (bk) bk.onclick = () => { B.drawing = null; B.view = null; B.keepScroll = false; draw(); };
+  }
+  // sandesh
+  if (B.view && B.view.name === 'msgs') {
+    on('msgall', () => composeMsg('all'));
+    SS.$$('[data-msg]').forEach((b) => (b.onclick = () => openMsg(b.dataset.msg)));
   }
   // staff
   if (B.view && B.view.name === 'staff') {
