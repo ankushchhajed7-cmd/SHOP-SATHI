@@ -1,6 +1,7 @@
 rules_version = '2';
 // =====================================================================
-// ShopSathi v1.4.0 — Firestore Security Rules
+// ShopSathi v1.5.0 — Firestore Security Rules
+// v1.5.0: msgs (dukaandar ka sandesh) — customer sirf readBy mein apna number jod sakta hai
 // v1.1.1: free plan nahi; nayi dukaan 'pending' (admin approve ya activation code se chalu);
 //         licenses (activation codes); naye customer ki manzoori (approveJoin)
 // Firebase Console > Firestore Database > Rules > ye poora text paste > Publish
@@ -149,6 +150,25 @@ service cloud.firestore {
           allow update: if isManager(shopId)
             || (isMe(mobile) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
         }
+      }
+
+      // ---- sandesh (v1.5.0): dukaandar bhejta hai; customer sirf "padh liya" (readBy) jodta hai ----
+      match /msgs/{mid} {
+        allow read: if isManager(shopId) || isAdmin();
+        allow create: if isManager(shopId)
+          && request.resource.data.readBy.size() == 0
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.byUid == request.auth.uid;
+        allow delete: if isOwner(shopId) || (isStaff(shopId) && resource.data.byUid == request.auth.uid);
+        allow update: if signedIn()
+          && (resource.data.to == 'all' || resource.data.to == myMobile())
+          && exists(memberDoc(shopId, myMobile()))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+          && !(myMobile() in resource.data.readBy)
+          && myMobile() in request.resource.data.readBy
+          && request.resource.data.readBy.hasAll(resource.data.readBy)
+          && request.resource.data.readBy.size() == resource.data.readBy.size() + 1;
       }
 
       // ---- bills ----

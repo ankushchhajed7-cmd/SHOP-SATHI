@@ -123,6 +123,7 @@ async function onLogin(u) {
   let cur = localStorage.getItem('ss_cur_shop');
   if (S.profile.shops.indexOf(cur) < 0) cur = S.profile.shops[0];
   selectShop(cur);
+  otherShopMsgs(cur);
 }
 
 /* ---------------- Join shop ---------------- */
@@ -244,6 +245,7 @@ function selectShop(id) {
     if (S.seenNotifs) list.forEach((n) => { if (!S.seenNotifs.has(n.id) && !n.read) { const x = notifText(n); SS.notify(x.title, x.body); } });
     S.seenNotifs = new Set(list.map((n) => n.id));
     S.notifs = list; render();
+    list.filter((n) => n.kind === 'msg' && !n.read).forEach((n) => queueFlash(id, n));
   }, onErr));
 }
 async function dropShop(id) {
@@ -428,9 +430,50 @@ function openGift(id) {
     } catch (e) {}
   };
 }
+
+/* ---------------- Dukaandar ka sandesh (v1.5.0): app khulte hi ek baar popup ---------------- */
+function queueFlash(shop, n) {
+  S.flashQ = S.flashQ || []; S.flashDone = S.flashDone || new Set();
+  const key = shop + '/' + n.id;
+  if (S.flashDone.has(key) || S.flashQ.some((x) => x.key === key)) return;
+  S.flashQ.push({ key, shop, id: n.id, text: n.text || '', at: n.at || 0 });
+  S.flashQ.sort((a, b) => a.at - b.at);
+  setTimeout(showFlash, 0);
+}
+async function otherShopMsgs(cur) {
+  for (const sid of S.profile.shops.filter((x) => x !== cur)) {
+    try {
+      const q = await SS.db.collection('shops').doc(sid).collection('members').doc(S.mobile).collection('notifs').where('kind', '==', 'msg').where('read', '==', false).get();
+      if (q.empty) continue;
+      if (!S.shopNames[sid]) { try { const d = await SS.db.collection('shops').doc(sid).get(); S.shopNames[sid] = d.exists ? d.data().name : sid; } catch (e) {} }
+      SS.docs(q).forEach((n) => queueFlash(sid, n));
+    } catch (e) { console.warn('msgs', sid, e); }
+  }
+}
+function msgReceipt(shop, id) {
+  SS.db.collection('shops').doc(shop).collection('msgs').doc(id).update({ readBy: SS.FV.arrayUnion(S.mobile) }).catch(() => {});
+}
+function showFlash() {
+  if (S.flashOpen || !S.flashQ || !S.flashQ.length) return;
+  const total = S.flashQ.length + (S.flashN || 0);
+  const f = S.flashQ.shift();
+  S.flashDone.add(f.key); S.flashOpen = true; S.flashN = (S.flashN || 0) + 1;
+  const shopName = S.shopNames[f.shop] || (f.shop === S.cur && S.shop && S.shop.name) || f.shop;
+  const done = () => {
+    SS.db.collection('shops').doc(f.shop).collection('members').doc(S.mobile).collection('notifs').doc(f.id).update({ read: true }).catch(() => {});
+    msgReceipt(f.shop, f.id);
+    S.flashOpen = false;
+    if (S.flashQ.length) setTimeout(showFlash, 250); else { S.flashN = 0; render(); }
+  };
+  const s = SS.sheet(t('msg_flash_t'),
+    '<div class="msgflash"><div class="msgshop">🏪 ' + esc(shopName) + (total > 1 ? '<span class="pill pend">' + S.flashN + '/' + total + '</span>' : '') + '</div>' +
+    '<div class="msgfull">' + esc(f.text) + '</div><div class="small muted">' + SS.fmtDT(f.at) + '</div></div>' +
+    '<button class="btn gold big" id="fok">' + ic('check') + t('msg_ok') + '</button>', { sticky: true, onClose: done });
+  s.el.querySelector('#fok').onclick = () => s.close();
+}
 /* naya level paar hua? ek baar badhai ka popup */
 function maybeLevelPopup() {
-  if (!S.gifts.length || !S.member) return;
+  if (!S.gifts.length || !S.member || S.flashOpen) return;
   const L = SS.levelState(S.gifts, S.member.points);
   const key = 'ss_lvlseen_' + S.cur + '_' + S.mobile + '_' + curScheme();
   let seen = 0;
@@ -541,6 +584,7 @@ function notifText(n) {
   if (n.kind === 'level_up') return { title: t('n_lvl_t', { l: SS.lvlName(n.level) }), body: n.next ? t('n_lvl_b', { l: SS.lvlName(n.level), n: SS.lvlName(n.next) }) : t('n_lvl_b_all', { l: SS.lvlName(n.level) }) };
   if (n.kind === 'join_ok') return { title: t('n_join_t'), body: t('n_join_b', { s: (S.shop && S.shop.name) || '' }) };
   if (n.kind === 'reversed') return { title: t('n_rev_t'), body: t('n_rev_b', { a: SS.fmtRs(n.amount), p: SS.fmtPts(n.points), r: n.reason || '' }) };
+  if (n.kind === 'msg') return { title: t('n_msg_t', { s: (S.shop && S.shop.name) || '' }), body: n.text || '' };
   if (n.kind === 'gift_cancel') return { title: t('n_gc_t'), body: t('n_gc_b', { g: n.gift || '', r: n.reason || '' }) + (n.again ? ' — ' + t('claim_again') : '') };
   return { title: n.title || 'ShopSathi', body: n.body || '' };
 }
@@ -548,13 +592,14 @@ function openNotifs() {
   const list = S.notifs;
   const m = SS.sheet(t('notifications'), '<div class="list">' + (list.length ? list.map((n) => {
     const x = notifText(n);
-    return '<div class="item" style="cursor:default' + (n.read ? '' : ';border-color:#D9A833') + '"><span class="ic">' + ic(n.kind === 'rejected' || n.kind === 'gift_cancel' || n.kind === 'reversed' ? 'x' : n.kind === 'gift' ? 'gift' : 'check', 20) + '</span><span class="t"><b>' + esc(x.title) + '</b><span>' + esc(x.body) + ' · ' + SS.fmtDT(n.at) + '</span></span></div>';
+    return '<div class="item" style="cursor:default' + (n.read ? '' : ';border-color:#D9A833') + '"><span class="ic">' + ic(n.kind === 'rejected' || n.kind === 'gift_cancel' || n.kind === 'reversed' ? 'x' : n.kind === 'gift' ? 'gift' : n.kind === 'msg' ? 'bell' : 'check', 20) + '</span><span class="t"><b>' + esc(x.title) + '</b><span>' + esc(x.body) + ' · ' + SS.fmtDT(n.at) + '</span></span></div>';
   }).join('') : '<div class="empty">' + t('no_notifs') + '</div>') + '</div>');
   const un = list.filter((n) => !n.read);
   if (un.length) {
     const b = SS.db.batch();
     un.forEach((n) => b.update(SS.db.collection('shops').doc(S.cur).collection('members').doc(S.mobile).collection('notifs').doc(n.id), { read: true }));
     b.commit().catch(() => {});
+    un.filter((n) => n.kind === 'msg').forEach((n) => msgReceipt(S.cur, n.id));
   }
   return m;
 }
