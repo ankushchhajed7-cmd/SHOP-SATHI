@@ -1,5 +1,5 @@
-/* ShopSathi customer service worker — v1.5.0 (network-first, offline cache) */
-const CACHE = 'ss-customer-v1.5.0';
+/* ShopSathi customer service worker — v1.5.1 (network-first, offline cache) */
+const CACHE = 'ss-customer-v1.5.1';
 const CORE = ['./', './index.html', './manifest.json', '../shared/theme.css', '../shared/config.js', '../shared/i18n.js', '../shared/common.js', '../icons/icon-192.png', '../icons/icon-512.png'];
 const CDN = /^https:\/\/(www\.gstatic\.com\/firebasejs|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 

@@ -18,6 +18,11 @@
   ['mobile', 'Mobile number', 'मोबाइल नंबर', 'मोबाईल नंबर', 'Mobile number'],
   ['pin', 'PIN (6 ank)', 'PIN (6 अंक)', 'PIN (6 अंक)', 'PIN (6 digits)'],
   ['pin_hint', 'yaad rakhne layak 6 ank', 'याद रखने लायक 6 अंक', 'लक्षात राहतील असे 6 अंक', '6 digits you will remember'],
+  // ---------- v1.5.1: calculator ----------
+  ['calc_title', 'Points Calculator', 'पॉइंट्स कैलकुलेटर', 'पॉइंट्स कॅल्क्युलेटर', 'Points Calculator'],
+  ['calc_sub', '% aur amount daalo → kitne points', '% और अमाउंट डालो → कितने पॉइंट्स', '% आणि रक्कम टाका → किती पॉइंट्स', 'Enter % and amount → points'],
+  ['calc_pct', 'Percentage (%)', 'प्रतिशत (%)', 'टक्के (%)', 'Percentage (%)'],
+  ['calc_amt', 'Amount (₹)', 'अमाउंट (₹)', 'रक्कम (₹)', 'Amount (₹)'],
   // ---------- v1.5.0: sandesh ----------
   ['msg_menu', 'Customers ko sandesh', 'ग्राहकों को संदेश', 'ग्राहकांना संदेश', 'Message customers'],
   ['msg_menu_sub', 'app khulte hi ek baar popup · padha ya nahi', 'ऐप खुलते ही एक बार पॉपअप · पढ़ा या नहीं', 'ॲप उघडताच एकदा पॉपअप · वाचला की नाही', 'one-time popup on app open · read status'],

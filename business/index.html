@@ -964,6 +964,7 @@ function vMore() {
     it('m_qr', 'qr', t('shop_qr'), t('shop_qr_sub')) +
     it('m_rep', 'chart', t('reports'), t('reports_sub')) +
     it('m_msg', 'bell', t('msg_menu'), t('msg_menu_sub')) +
+    it('m_calc', 'chart', t('calc_title'), t('calc_sub')) +
     it('m_plan', 'star', t('plan'), t('plan_paid_till', { d: SS.fmtDateFull(sh.paidUntil) })) +
     (isOwner() ? it('m_set', 'settings', t('settings'), t('settings_sub')) + it('m_staff', 'users', t('staff'), t('staff_sub')) + it('m_xl', 'download', t('excel_backup'), t('excel_sub')) : '') +
     '</div><label class="f">' + t('language') + SS.langSelect('lang') + '</label>' +
@@ -1196,6 +1197,23 @@ async function deleteShop() {
   finally { SS.busy(false); }
 }
 
+/* ---------------- v1.5.1: simple points calculator (% + amount = points) ---------------- */
+function pointsCalc() {
+  const pct0 = B.shop.pointsMode === 'fixed' ? '' : String(B.shop.percent || '');
+  const s = SS.sheet(t('calc_title'),
+    '<label class="f">' + t('calc_pct') + '<input class="inp" id="kp" type="number" inputmode="decimal" step="any" min="0" value="' + esc(pct0) + '" placeholder="0.35"></label>' +
+    '<label class="f">' + t('calc_amt') + '<input class="inp" id="ka" type="number" inputmode="decimal" step="any" min="0" placeholder="100000"></label>' +
+    '<div class="okbox center" id="kr" style="font-size:16px"></div>');
+  const p = s.el.querySelector('#kp'), a = s.el.querySelector('#ka'), r = s.el.querySelector('#kr');
+  const calc = () => {
+    const pc = Number(p.value) || 0, am = Number(a.value) || 0;
+    const pts = Math.round(am * pc / 100 * 10000) / 10000;
+    r.innerHTML = '<div class="small muted">' + SS.fmtRs(am) + ' × ' + pc + '%</div><b style="font-size:32px;line-height:1.2">' + SS.fmtPts(pts) + '</b><div>' + t('points') + '</div>';
+  };
+  p.oninput = calc; a.oninput = calc; calc();
+  setTimeout(() => (pct0 ? a : p).focus(), 50);
+}
+
 /* ---------------- Sandesh (v1.5.0): customer ko message — app khulte hi ek baar popup ---------------- */
 const MSG_MAX = 300;
 function msgRecipients(to) {
@@ -1402,6 +1420,7 @@ function bindAll() {
   // more
   on('m_qr', () => open({ name: 'qr' }));
   on('m_rep', () => openView('reports'));
+  on('m_calc', pointsCalc);
   on('m_msg', () => { open({ name: 'msgs' }); loadMsgs(); });
   on('m_plan', openPlan);
   on('m_set', () => open({ name: 'settings' }));
