@@ -1,4 +1,4 @@
-# ShopSathi v1.5.1 — har bill par reward points
+# ShopSathi v1.5.2 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.5.2 (30 Oct 2026)** — Duplicate bill ab apne aap reject nahi: laal chetavni dikhegi ("Duplicate ho sakta hai — photo milakar check karein"), phir **Approve** ya **Reject** dukaandar ki marzi. Approve par ek baar pakka karne ka sawaal. Rules badlaav nahi.
 - **v1.5.1 (24 Oct 2026)** — Business app → Aur → **Points Calculator**: % aur amount daalo → kitne points (jaise ₹1,00,000 × 0.35% = 350). Sirf hisaab, settings nahi badalti.
 - **v1.5.0 (22 Oct 2026)** — **Customers ko sandesh**: Business app → customer kholein → "Sandesh bhejein", ya Aur → "Customers ko sandesh" → sabhi ko (sirf malik). Customer app khulte hi ek baar bada popup (kai sandesh ho to 1/3, 2/3…), "Theek hai, padh liya" ke baad normal app; baad mein 🔔 mein. Business mein padha ✅ / nahi ⏳ aur 12/40 ne padha; galti ho to "Sandesh wapas lein". Max 300 akshar. **firestore.rules Publish karein.**
 - **v1.4.2 (18 Oct 2026)** — **PIN badlein**: Customer app (Profile) aur Business app (Aur → dukaandar + staff) mein purana PIN → naya PIN do baar. Aasaan PIN (123456/111111…) aur purane jaisa PIN mana. Rules badlaav nahi.

@@ -11,7 +11,7 @@
 (function () {
   'use strict';
   const SS = (window.SS = window.SS || {});
-  SS.VERSION = '1.5.1';
+  SS.VERSION = '1.5.2';
   const CFG = window.SS_CONFIG || {};
   SS.CFG = CFG;
 
