@@ -14,6 +14,7 @@ Firebase project: shopsathi-25794 · Super Admin: 9765838383 · Backup repo (pri
 - v1.4.2 (18 Oct 2026) — PIN badlein: Customer Profile + Business "Aur" (owner + staff); purana PIN zaroori, aasaan PIN mana
 - v1.5.0 (22 Oct 2026) — Customers ko sandesh (ek / sabhi), app khulte hi ek baar popup, padha/nahi status, wapas lein; rules: msgs collection
 - v1.5.1 (24 Oct 2026) — Business Aur → Points Calculator (% + amount → points; default dukaan ka %). Ankush ne simple hi maanga — extra modes nahi.
+- v1.5.2 (30 Oct 2026) — Duplicate (photo / bill no. / din+amount) par business mein sirf chetavni + Approve/Reject dono (Approve par confirm). Kaaran: galat duplicate reject ho rahe the (alag customer, same bill no.). Customer app ka apna-duplicate upload rok waisa hi.
 
 ## Settings / decisions
 - Free plan nahi; har dukaan admin approve ya activation code se. Customer app hamesha free.

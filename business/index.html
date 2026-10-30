@@ -544,11 +544,9 @@ async function openBill(id) {
   apr.disabled = true; apr.innerHTML = SS.tDev('dup_checking');
   const dupP = findDups(b).then((d) => {
     if (d.hard.length) {
-      // pakka duplicate — approve ka button hi nahi
+      // v1.5.2: duplicate jaisa — sirf chetavni; Approve / Reject malik ki marzi
       dupBox.innerHTML = '<div class="err dupalert"><b>⚠️ ' + SS.tDev('w_dup_block') + '</b><br>' + d.hard.map(dupLine).join('<br>') + '</div>';
-      apr.className = 'btn danger'; apr.disabled = false; apr.innerHTML = ic('x') + SS.tDev('dup_reject');
-      apr.onclick = async () => { try { await doReject(b, t('rs_dup')); sheet.close(); } catch (e) {} };
-      const rj = sheet.el.querySelector('#rej'); if (rj) rj.remove();
+      apr.disabled = false; apr.innerHTML = ic('check') + t('approve');
     } else {
       if (d.soft.length) dupBox.innerHTML = '<div class="warn dupalert">⚠️ ' + SS.tDev('w_dup_soft') + '<br>' + d.soft.map(dupLine).join('<br>') + '</div>';
       apr.disabled = false; apr.innerHTML = ic('check') + t('approve');
@@ -565,7 +563,7 @@ async function openBill(id) {
     const amt = SS.num(fa.value);
     if (!(amt > 0)) return SS.toast(t('err_amount'), 'err');
     const d = await dupP;
-    if (d.hard.length) return SS.toast(SS.tDev('err_dup_block'), 'err');
+    if (d.hard.length && !(await SS.confirm(SS.tDev('confirm_dup_hard'), t('approve'), true))) return;
     if (d.soft.length && !(await SS.confirm(SS.tDev('confirm_dup_soft'), t('approve')))) return;
     try { await SS.run(() => creditBill({ billId: b.id, memberId: b.memberId, finalAmount: amt }), t('approved_ok')); sheet.close(); loadMonthStats(); }
     catch (e) {}
