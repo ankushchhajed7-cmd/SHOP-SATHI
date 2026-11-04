@@ -18,6 +18,14 @@
   ['mobile', 'Mobile number', 'मोबाइल नंबर', 'मोबाईल नंबर', 'Mobile number'],
   ['pin', 'PIN (6 ank)', 'PIN (6 अंक)', 'PIN (6 अंक)', 'PIN (6 digits)'],
   ['pin_hint', 'yaad rakhne layak 6 ank', 'याद रखने लायक 6 अंक', 'लक्षात राहतील असे 6 अंक', '6 digits you will remember'],
+  // ---------- v1.5.3: points list ----------
+  ['pl_btn', 'Sabke points — WhatsApp list', 'सबके पॉइंट्स — WhatsApp लिस्ट', 'सर्वांचे पॉइंट्स — WhatsApp यादी', 'All points — WhatsApp list'],
+  ['pl_title', 'Sabhi customers ke points', 'सभी ग्राहकों के पॉइंट्स', 'सर्व ग्राहकांचे पॉइंट्स', 'Points of all customers'],
+  ['pl_head', 'Customers ke points ({d})', 'ग्राहकों के पॉइंट्स ({d})', 'ग्राहकांचे पॉइंट्स ({d})', 'Customer points ({d})'],
+  ['pl_total', 'Kul {n} customers · {p} points', 'कुल {n} ग्राहक · {p} पॉइंट्स', 'एकूण {n} ग्राहक · {p} पॉइंट्स', 'Total {n} customers · {p} points'],
+  ['pl_wa', 'WhatsApp par bhejein', 'WhatsApp पर भेजें', 'WhatsApp वर पाठवा', 'Send on WhatsApp'],
+  ['pl_copy', 'Copy', 'कॉपी', 'कॉपी', 'Copy'],
+  ['pl_share', 'Share', 'शेयर', 'शेअर', 'Share'],
   // ---------- v1.5.1: calculator ----------
   ['calc_title', 'Points Calculator', 'पॉइंट्स कैलकुलेटर', 'पॉइंट्स कॅल्क्युलेटर', 'Points Calculator'],
   ['calc_sub', '% aur amount daalo → kitne points', '% और अमाउंट डालो → कितने पॉइंट्स', '% आणि रक्कम टाका → किती पॉइंट्स', 'Enter % and amount → points'],

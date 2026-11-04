@@ -15,6 +15,7 @@ Firebase project: shopsathi-25794 · Super Admin: 9765838383 · Backup repo (pri
 - v1.5.0 (22 Oct 2026) — Customers ko sandesh (ek / sabhi), app khulte hi ek baar popup, padha/nahi status, wapas lein; rules: msgs collection
 - v1.5.1 (24 Oct 2026) — Business Aur → Points Calculator (% + amount → points; default dukaan ka %). Ankush ne simple hi maanga — extra modes nahi.
 - v1.5.2 (30 Oct 2026) — Duplicate (photo / bill no. / din+amount) par business mein sirf chetavni + Approve/Reject dono (Approve par confirm). Kaaran: galat duplicate reject ho rahe the (alag customer, same bill no.). Customer app ka apna-duplicate upload rok waisa hi.
+- v1.5.3 (4 Nov 2026) — Customers tab: sabke points ek message (naam — mobile — points, zyada pehle, kul total) → WhatsApp/Copy/Share. Gift level note: 300 pts = Level 1 Bronze (350 wala abhi L1, blur 400 par).
 
 ## Settings / decisions
 - Free plan nahi; har dukaan admin approve ya activation code se. Customer app hamesha free.

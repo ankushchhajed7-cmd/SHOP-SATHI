@@ -724,6 +724,7 @@ function vCustomers() {
     pendingJoinHTML() +
     '<div class="search">' + ic('search', 20) + '<input class="inp" id="cq" type="search" placeholder="' + t('search_cust') + '" value="' + esc(B.custQuery) + '" aria-label="' + t('search_cust') + '"></div>' +
     '<div class="chips">' + chip('name', t('sort_name')) + chip('points', t('sort_points')) + chip('blocked', t('blocked')) + '</div>' +
+    '<button class="btn gold full" id="ptsall">' + ic('wa') + t('pl_btn') + '</button>' +
     '<div class="list" id="clist">' + custRows(list) + '</div></main>';
 }
 /* naye customer jo manzoori ka intezaar kar rahe hain (Settings: approveJoin) */
@@ -1195,6 +1196,24 @@ async function deleteShop() {
   finally { SS.busy(false); }
 }
 
+/* ---------------- v1.5.3: sabhi customers ke points — ek hi message (WhatsApp / copy) ---------------- */
+function pointsListText() {
+  const list = B.members.filter((m) => !m.pending).sort((a, b) => (b.points || 0) - (a.points || 0));
+  const tot = list.reduce((a, m) => a + (Number(m.points) || 0), 0);
+  const lines = list.map((m, i) => (i + 1) + '. ' + (m.name || m.code || '-') + ' — ' + m.id + ' — ' + SS.fmtPts(m.points || 0) + ' pts');
+  return '🏪 ' + B.shop.name + '\n' + t('pl_head', { d: SS.fmtDateFull(SS.now()) }) + '\n\n' + lines.join('\n') +
+    '\n\n' + t('pl_total', { n: list.length, p: SS.fmtPts(tot) });
+}
+function pointsList() {
+  const text = pointsListText();
+  const s = SS.sheet(t('pl_title'),
+    '<textarea class="inp" readonly style="height:auto;min-height:260px;padding:12px;font-size:14px;line-height:1.45">' + esc(text) + '</textarea>' +
+    '<a class="btn gold big" target="_blank" rel="noopener" href="' + SS.wa('', text) + '">' + ic('wa') + t('pl_wa') + '</a>' +
+    '<div class="btnrow"><button class="btn light" id="plcp">' + ic('share') + t('pl_copy') + '</button><button class="btn light" id="plsh">' + ic('share') + t('pl_share') + '</button></div>');
+  s.el.querySelector('#plcp').onclick = () => SS.copy(text);
+  s.el.querySelector('#plsh').onclick = () => SS.share(text);
+}
+
 /* ---------------- v1.5.1: simple points calculator (% + amount = points) ---------------- */
 function pointsCalc() {
   const pct0 = B.shop.pointsMode === 'fixed' ? '' : String(B.shop.percent || '');
@@ -1376,6 +1395,7 @@ function bindAll() {
   on('back', () => { B.view = null; B.keepScroll = false; draw(); });
   on('scanc', scanCustomer);
   on('addc', addCustomer);
+  on('ptsall', pointsList);
   on('upg', openPlan);
   SS.$$('[data-jok]').forEach((b) => (b.onclick = () => approveJoin(b.dataset.jok).catch(() => {})));
   SS.$$('[data-jno]').forEach((b) => (b.onclick = () => rejectJoin(b.dataset.jno).catch(() => {})));
