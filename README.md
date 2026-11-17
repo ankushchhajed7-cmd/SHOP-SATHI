@@ -1,4 +1,4 @@
-# ShopSathi v1.5.4 — har bill par reward points
+# ShopSathi v1.5.5 — har bill par reward points
 
 Kisi bhi dukaan (kirana, medical, kapde…) ke liye reward points app:
 customer bill ki photo upload karta hai → dukaandar check karke approve karta hai → points judte hain → points se gift.
@@ -88,6 +88,7 @@ LICENSE               © Ankush New Vision — bina ijazat copy/bechna mana
 `users/{uid}` · `shops/{code}` · `shops/{code}/members/{mobile}` (+ `notifs`) · `bills` · `photos` · `gifts` · `redemptions` · `ledger`
 
 ## Changelog
+- **v1.5.5 (17 Nov 2026)** — Block screen ka sandesh: "Aapne monthly target poora nahi kiya, isliye aapka account block hua hai. Jaankari ke liye dukaan se sampark karein." ("dukaan ne block kiya" wali line hata di).
 - **v1.5.4 (17 Nov 2026)** — Block kiye customer ka app band: sirf laal "Account band hai" screen (dukaan ka naam, Call / WhatsApp / Logout; doosri dukaan ho to "Doosri dukaan kholein"). Points/bills/gifts kuch nahi dikhta. Block/Unblock turant lagta hai. Rules badlaav nahi.
 - **v1.5.3 (4 Nov 2026)** — Business app → Customers → **"Sabke points — WhatsApp list"**: sabhi customers ka naam, mobile aur points (zyada points pehle) ek hi message mein — WhatsApp / Copy / Share. Rules badlaav nahi.
 - **v1.5.2 (30 Oct 2026)** — Duplicate bill ab apne aap reject nahi: laal chetavni dikhegi ("Duplicate ho sakta hai — photo milakar check karein"), phir **Approve** ya **Reject** dukaandar ki marzi. Approve par ek baar pakka karne ka sawaal. Rules badlaav nahi.

@@ -17,6 +17,7 @@ Firebase project: shopsathi-25794 · Super Admin: 9765838383 · Backup repo (pri
 - v1.5.2 (30 Oct 2026) — Duplicate (photo / bill no. / din+amount) par business mein sirf chetavni + Approve/Reject dono (Approve par confirm). Kaaran: galat duplicate reject ho rahe the (alag customer, same bill no.). Customer app ka apna-duplicate upload rok waisa hi.
 - v1.5.3 (4 Nov 2026) — Customers tab: sabke points ek message (naam — mobile — points, zyada pehle, kul total) → WhatsApp/Copy/Share. Gift level note: 300 pts = Level 1 Bronze (350 wala abhi L1, blur 400 par).
 - v1.5.4 (17 Nov 2026) — Customer app: member.blocked → poori app ki jagah block screen (Call/WhatsApp dukaan, Logout, doosri dukaan). Ankush ne sirf point 1 chuna — kaaran likhna, rules-level rok abhi nahi (baad mein chahein to).
+- v1.5.5 (17 Nov 2026) — Block screen text: monthly target poora nahi kiya isliye block (Ankush ki maang; "X ne block kiya" nahi dikhana).
 
 ## Settings / decisions
 - Free plan nahi; har dukaan admin approve ya activation code se. Customer app hamesha free.

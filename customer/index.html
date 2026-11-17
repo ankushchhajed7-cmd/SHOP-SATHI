@@ -278,7 +278,7 @@ function drawBlocked() {
     '<div class="blockcard"><div class="blockic">⛔</div>' +
     '<b class="blockt">' + SS.tDev('blk_title') + '</b>' +
     '<div class="blockshop">🏪 ' + esc(sh.name || '') + '</div>' +
-    '<div class="blockmsg">' + SS.tDev('blk_body', { s: esc(sh.name || '') }) + '</div>' +
+    '<div class="blockmsg">' + SS.tDev('blk_body') + '</div>' +
     (mob ? '<div class="btnrow"><a class="btn dark" href="tel:' + esc(mob) + '">' + ic('phone') + t('blk_call') + '</a><a class="btn gold" target="_blank" rel="noopener" href="' + SS.wa(mob, t('blk_wa', { c: S.member.code || '' })) + '">' + ic('wa') + 'WhatsApp</a></div>' : '') +
     (multi ? '<button class="btn light full" id="bsw">' + ic('shop') + t('blk_other') + '</button>' : '') +
     '<button class="btn light full" id="blo">' + ic('logout') + t('logout') + '</button></div></main>';
