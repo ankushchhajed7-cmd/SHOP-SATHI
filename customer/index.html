@@ -262,12 +262,28 @@ let rq = 0;
 function render() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; draw(); }); }
 function draw() {
   if (!S.shop || !S.member) return;
+  if (S.member.blocked) return drawBlocked();
   const keepScroll = window.scrollY;
   const tabs = { home: drawHome, bills: drawBills, gifts: drawGifts, profile: drawProfile };
   app.innerHTML = (tabs[S.tab] || drawHome)() + navHTML();
   bindCommon();
   ({ home: bindHome, bills: bindBills, gifts: bindGifts, profile: bindProfile }[S.tab] || bindHome)();
   window.scrollTo(0, keepScroll);
+}
+/* v1.5.4: dukaan ne block kiya → poora app band, sirf block screen (call / WhatsApp / logout) */
+function drawBlocked() {
+  const sh = S.shop, mob = sh.mobile || '';
+  const multi = S.profile && S.profile.shops && S.profile.shops.length > 1;
+  app.innerHTML = '<main class="page blockpg">' +
+    '<div class="blockcard"><div class="blockic">⛔</div>' +
+    '<b class="blockt">' + SS.tDev('blk_title') + '</b>' +
+    '<div class="blockshop">🏪 ' + esc(sh.name || '') + '</div>' +
+    '<div class="blockmsg">' + SS.tDev('blk_body', { s: esc(sh.name || '') }) + '</div>' +
+    (mob ? '<div class="btnrow"><a class="btn dark" href="tel:' + esc(mob) + '">' + ic('phone') + t('blk_call') + '</a><a class="btn gold" target="_blank" rel="noopener" href="' + SS.wa(mob, t('blk_wa', { c: S.member.code || '' })) + '">' + ic('wa') + 'WhatsApp</a></div>' : '') +
+    (multi ? '<button class="btn light full" id="bsw">' + ic('shop') + t('blk_other') + '</button>' : '') +
+    '<button class="btn light full" id="blo">' + ic('logout') + t('logout') + '</button></div></main>';
+  const sw = SS.$('#bsw'); if (sw) sw.onclick = openShops;
+  SS.$('#blo').onclick = async () => { if (await SS.confirm(t('confirm_logout'), t('logout'))) SS.logout(); };
 }
 function navHTML() {
   const b = (k, icn, lbl) => '<button class="' + (S.tab === k ? 'on' : '') + '" data-tab="' + k + '" aria-label="' + lbl + '">' + ic(icn, 24) + lbl + '</button>';
@@ -454,7 +470,7 @@ function msgReceipt(shop, id) {
   SS.db.collection('shops').doc(shop).collection('msgs').doc(id).update({ readBy: SS.FV.arrayUnion(S.mobile) }).catch(() => {});
 }
 function showFlash() {
-  if (S.flashOpen || !S.flashQ || !S.flashQ.length) return;
+  if (S.flashOpen || !S.flashQ || !S.flashQ.length || (S.member && S.member.blocked)) return;
   const total = S.flashQ.length + (S.flashN || 0);
   const f = S.flashQ.shift();
   S.flashDone.add(f.key); S.flashOpen = true; S.flashN = (S.flashN || 0) + 1;

@@ -18,6 +18,12 @@
   ['mobile', 'Mobile number', 'मोबाइल नंबर', 'मोबाईल नंबर', 'Mobile number'],
   ['pin', 'PIN (6 ank)', 'PIN (6 अंक)', 'PIN (6 अंक)', 'PIN (6 digits)'],
   ['pin_hint', 'yaad rakhne layak 6 ank', 'याद रखने लायक 6 अंक', 'लक्षात राहतील असे 6 अंक', '6 digits you will remember'],
+  // ---------- v1.5.4: block screen ----------
+  ['blk_title', 'Account band hai', 'अकाउंट बंद है', 'खाते बंद आहे', 'Account blocked'],
+  ['blk_body', '{s} ne aapka account band kar diya hai. Aap abhi is app ka upyog nahi kar sakte. Jaankari ke liye dukaan se sampark karein.', '{s} ने आपका अकाउंट बंद कर दिया है। आप अभी इस ऐप का उपयोग नहीं कर सकते। जानकारी के लिए दुकान से संपर्क करें।', '{s} ने तुमचे खाते बंद केले आहे. तुम्ही सध्या हे ॲप वापरू शकत नाही. माहितीसाठी दुकानाशी संपर्क करा.', '{s} has blocked your account. You cannot use this app right now. Please contact the shop.'],
+  ['blk_call', 'Call karein', 'कॉल करें', 'कॉल करा', 'Call'],
+  ['blk_wa', 'Namaste, mera ShopSathi account ({c}) band dikha raha hai. Kripya bataiye.', 'नमस्ते, मेरा ShopSathi अकाउंट ({c}) बंद दिखा रहा है। कृपया बताइए।', 'नमस्कार, माझे ShopSathi खाते ({c}) बंद दाखवत आहे. कृपया सांगा.', 'Hello, my ShopSathi account ({c}) shows as blocked. Please help.'],
+  ['blk_other', 'Doosri dukaan kholein', 'दूसरी दुकान खोलें', 'दुसरे दुकान उघडा', 'Open another shop'],
   // ---------- v1.5.3: points list ----------
   ['pl_btn', 'Sabke points — WhatsApp list', 'सबके पॉइंट्स — WhatsApp लिस्ट', 'सर्वांचे पॉइंट्स — WhatsApp यादी', 'All points — WhatsApp list'],
   ['pl_title', 'Sabhi customers ke points', 'सभी ग्राहकों के पॉइंट्स', 'सर्व ग्राहकांचे पॉइंट्स', 'Points of all customers'],

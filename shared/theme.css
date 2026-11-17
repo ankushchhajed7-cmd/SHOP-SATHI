@@ -204,3 +204,11 @@ nav.bnav .dot{position:absolute;top:0;right:8px;min-width:18px;height:18px;borde
 .msgflash{display:flex;flex-direction:column;gap:10px;border:2px solid #D9A833;border-radius:14px;padding:14px;background:#FFF9E8}
 .msgflash .msgshop{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;color:var(--ink2)}
 .msgline{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+
+/* v1.5.4 block screen */
+.blockpg{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.blockcard{width:100%;max-width:420px;background:#fff;border:3px solid #9B2C2C;border-radius:20px;padding:24px 18px;display:flex;flex-direction:column;gap:14px;text-align:center;box-shadow:0 8px 30px rgba(155,44,44,.18)}
+.blockic{font-size:64px;line-height:1}
+.blockt{font-size:22px;color:#9B2C2C}
+.blockshop{font-weight:700;font-size:16px;color:var(--ink2)}
+.blockmsg{font-size:16px;line-height:1.5;background:#FDECEC;color:#7A1F1F;border-radius:12px;padding:12px}
